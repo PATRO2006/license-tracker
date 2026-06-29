@@ -1,0 +1,14 @@
+{
+  "name": "license-tracker",
+  "version": "1.0.0",
+  "description": "License Tracking System — single-service deploy (Express serves the built React app)",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "build": "npm run install:all && npm --prefix client run build && npm --prefix server run seed",
+    "start": "npm --prefix server start"
+  }
+}

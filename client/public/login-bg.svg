@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1024" viewBox="0 0 1440 1024" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b1747"/>
+      <stop offset="0.45" stop-color="#6d2b6b"/>
+      <stop offset="0.72" stop-color="#c43e7f"/>
+      <stop offset="0.86" stop-color="#f06595"/>
+      <stop offset="1" stop-color="#f7a37b"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="50%" cy="86%" r="42%">
+      <stop offset="0" stop-color="#ffd9b0" stop-opacity="0.95"/>
+      <stop offset="0.4" stop-color="#ff9ec2" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#ff9ec2" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="m1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7b3f86"/><stop offset="1" stop-color="#5c2f70"/>
+    </linearGradient>
+    <linearGradient id="m2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5e2f6e"/><stop offset="1" stop-color="#46245a"/>
+    </linearGradient>
+    <linearGradient id="m3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#412350"/><stop offset="1" stop-color="#2e1840"/>
+    </linearGradient>
+    <linearGradient id="lake" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3a9c4" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#7d3f86" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="fg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#241334"/><stop offset="1" stop-color="#160c22"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1440" height="1024" fill="url(#sky)"/>
+  <circle cx="720" cy="600" r="520" fill="url(#sun)"/>
+
+  <path d="M0 470 L180 360 L320 430 L470 320 L560 400 L700 300 L820 410 L980 330 L1120 420 L1280 350 L1440 430 L1440 1024 L0 1024 Z" fill="url(#m1)" opacity="0.92"/>
+  <path d="M0 560 L150 500 L300 560 L430 470 L600 560 L760 480 L900 560 L1060 490 L1220 560 L1360 500 L1440 560 L1440 1024 L0 1024 Z" fill="url(#m2)" opacity="0.95"/>
+
+  <path d="M520 612 h400 v92 a200 28 0 0 1 -400 0 Z" fill="url(#lake)"/>
+  <path d="M540 628 h360 a180 14 0 0 1 -360 0 Z" fill="#ffe0c0" opacity="0.18"/>
+
+  <path d="M0 700 L220 600 L360 690 L520 612 L920 612 L1080 700 L1240 620 L1440 720 L1440 1024 L0 1024 Z" fill="url(#m3)"/>
+
+  <path d="M0 850 L260 740 L520 830 L820 730 L1120 840 L1440 760 L1440 1024 L0 1024 Z" fill="url(#fg)"/>
+
+  <g fill="#140b20" opacity="0.96">
+    <path d="M120 1024 L150 880 L180 1024 Z"/>
+    <path d="M160 1024 L196 850 L232 1024 Z"/>
+    <path d="M214 1024 L240 900 L266 1024 Z"/>
+    <path d="M1180 1024 L1212 868 L1244 1024 Z"/>
+    <path d="M1238 1024 L1268 884 L1298 1024 Z"/>
+    <path d="M1290 1024 L1314 908 L1338 1024 Z"/>
+  </g>
+</svg>
