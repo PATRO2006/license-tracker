@@ -4,12 +4,16 @@ import { StatusChip } from '../components.jsx';
 import RequestModal from './RequestModal.jsx';
 
 const FILTERS = ['All', 'Pending', 'Approved', 'Rejected', 'Completed'];
+const catLabel = (c) => (c === 'ic' ? 'IC Training' : 'Employee Training');
 
 export default function Requests({ notify, onChange }) {
   const [requests, setRequests] = useState([]);
   const [clients, setClients] = useState([]);
   const [filter, setFilter] = useState('All');
   const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null); // request being edited
+  const [editCount, setEditCount] = useState(0);
+  const [editDetails, setEditDetails] = useState('');
 
   const reload = () => api.requests().then(setRequests).catch(() => {});
   useEffect(() => {
@@ -25,6 +29,24 @@ export default function Requests({ notify, onChange }) {
     notify?.(`Request for ${clientName(r.clientId)} marked ${status}.`);
     reload();
     onChange?.();
+  }
+
+  function openEdit(r) {
+    setEditing(r);
+    setEditCount(r.requestedCount);
+    setEditDetails(r.details || '');
+  }
+  async function saveEdit(e) {
+    e.preventDefault();
+    try {
+      await api.editRequest(editing.id, { requestedCount: Number(editCount), details: editDetails });
+      notify?.('Request updated.');
+      setEditing(null);
+      reload();
+      onChange?.();
+    } catch (err) {
+      notify?.(`Failed: ${err.message}`);
+    }
   }
 
   return (
@@ -46,21 +68,22 @@ export default function Requests({ notify, onChange }) {
         <div className="card" style={{ overflow: 'hidden' }}>
           <table className="tbl">
             <thead>
-              <tr><th>Client</th><th>Type</th><th>Requested</th><th>Current</th><th>Date</th><th>Status</th><th>Details</th><th>Action</th></tr>
+              <tr><th>Client</th><th>For</th><th>Type</th><th>Requested</th><th>Date</th><th>Status</th><th>Details</th><th>Action</th></tr>
             </thead>
             <tbody>
               {shown.map((r) => (
                 <tr key={r.id}>
                   <td style={{ fontWeight: 600 }}>{clientName(r.clientId)}</td>
+                  <td><span className={`chip ${r.category === 'ic' ? 'pending' : 'approved'}`}>{catLabel(r.category)}</span></td>
                   <td style={{ textTransform: 'capitalize' }}>{r.type}</td>
                   <td><b>+{r.requestedCount}</b></td>
-                  <td>{r.currentCount}</td>
                   <td className="muted">{r.requestDate}</td>
                   <td><StatusChip status={r.status} /></td>
-                  <td className="muted" style={{ maxWidth: 240, fontSize: 13 }}>{r.details}</td>
+                  <td className="muted" style={{ maxWidth: 220, fontSize: 13 }}>{r.details}</td>
                   <td>
                     {r.status === 'Pending' ? (
                       <div className="row" style={{ gap: 6 }}>
+                        <button className="btn btn-sm" onClick={() => openEdit(r)}>Edit</button>
                         <button className="btn btn-sm btn-success" onClick={() => setStatus(r, 'Approved')}>Approve</button>
                         <button className="btn btn-sm btn-danger" onClick={() => setStatus(r, 'Rejected')}>Reject</button>
                       </div>
@@ -83,6 +106,21 @@ export default function Requests({ notify, onChange }) {
           onCreated={() => { reload(); onChange?.(); }}
           notify={notify}
         />
+      )}
+
+      {editing && (
+        <div className="modal-backdrop" onClick={() => setEditing(null)}>
+          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={saveEdit}>
+            <h2>Edit request</h2>
+            <p className="muted" style={{ margin: 0, fontSize: 13 }}>{clientName(editing.clientId)} · {catLabel(editing.category)} — adjust before approving.</p>
+            <div className="field"><label>Requested count</label><input type="number" min="0" value={editCount} onChange={(e) => setEditCount(e.target.value)} /></div>
+            <div className="field"><label>Details</label><textarea value={editDetails} onChange={(e) => setEditDetails(e.target.value)} /></div>
+            <div className="modal-actions">
+              <button type="button" className="btn" onClick={() => setEditing(null)}>Cancel</button>
+              <button type="submit" className="btn btn-primary">Save</button>
+            </div>
+          </form>
+        </div>
       )}
     </>
   );

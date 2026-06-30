@@ -5,6 +5,7 @@ import { api } from '../api.js';
 // backend email notification to Anusha.
 export default function RequestModal({ clients, defaultClientId, onClose, onCreated, notify }) {
   const [clientId, setClientId] = useState(defaultClientId || (clients[0] && clients[0].id) || '');
+  const [category, setCategory] = useState('employee');
   const [type, setType] = useState('additional');
   const [requestedCount, setRequestedCount] = useState(10);
   const [details, setDetails] = useState('');
@@ -14,7 +15,7 @@ export default function RequestModal({ clients, defaultClientId, onClose, onCrea
     e.preventDefault();
     setBusy(true);
     try {
-      const res = await api.createRequest({ clientId, type, requestedCount: Number(requestedCount), details });
+      const res = await api.createRequest({ clientId, category, type, requestedCount: Number(requestedCount), details });
       const name = clients.find((c) => c.id === clientId)?.name || 'client';
       notify?.(`Request created for ${name}. Email notification ${res.emailQueued ? 'sent' : 'queued'} to the admin team.`);
       onCreated?.(res.request);
@@ -39,6 +40,14 @@ export default function RequestModal({ clients, defaultClientId, onClose, onCrea
         </div>
 
         <div className="field">
+          <label>Request for</label>
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="employee">Employee Training (main licenses)</option>
+            <option value="ic">IC Training</option>
+          </select>
+        </div>
+
+        <div className="field">
           <label>Request type</label>
           <select value={type} onChange={(e) => setType(e.target.value)}>
             <option value="new">New licenses</option>
@@ -48,7 +57,7 @@ export default function RequestModal({ clients, defaultClientId, onClose, onCrea
         </div>
 
         <div className="field">
-          <label>Requested license count</label>
+          <label>{category === 'ic' ? 'Requested IC Training seats' : 'Requested license count'}</label>
           <input type="number" min="0" value={requestedCount} onChange={(e) => setRequestedCount(e.target.value)} />
         </div>
 

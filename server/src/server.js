@@ -9,6 +9,7 @@ import {
   getUserByLogin, getUserById, getRequestById,
   insertClient, insertUser, insertRequest, insertHistory,
   updateRequestStatus, bumpClientTotal, updateUserPassword, updateClientFields,
+  bumpTrainingOrdered, updateRequestFields,
 } from './db.js';
 import { enrichClient, buildDashboard } from './logic.js';
 import { sendRequestNotification, sendDecisionNotification, readOutbox } from './email.js';
@@ -170,8 +171,9 @@ app.post('/api/requests', authRequired, async (req, res) => {
   const client = await getClient(clientId);
   if (!client) return res.status(400).json({ error: 'Unknown client' });
 
+  const category = b.category === 'ic' ? 'ic' : 'employee';
   const request = {
-    id: newId('r'), clientId, type: b.type || 'additional',
+    id: newId('r'), clientId, type: b.type || 'additional', category,
     requestedCount: Number(b.requestedCount || 0), currentCount: client.totalPurchased,
     details: b.details || '', status: 'Pending', requestDate: today(), completionDate: null,
   };
@@ -182,32 +184,57 @@ app.post('/api/requests', authRequired, async (req, res) => {
   res.status(201).json({ request, emailQueued });
 });
 
-// Approve / reject / complete — admin only. Emails the client the decision.
+// Admin only. Two modes:
+//   • Edit a pending request's count/details (no `status` in body)
+//   • Change status (approve/reject/complete) — approval adds the licenses
 app.patch('/api/requests/:id', authRequired, adminOnly, async (req, res) => {
   const request = await getRequestById(req.params.id);
   if (!request) return res.status(404).json({ error: 'Request not found' });
-  const next = req.body.status;
+  const b = req.body || {};
+
+  // ----- Edit mode -----
+  if (!('status' in b) && ('requestedCount' in b || 'details' in b)) {
+    if (request.status !== 'Pending') return res.status(400).json({ error: 'Only pending requests can be edited' });
+    const fields = {};
+    if ('requestedCount' in b) fields.requestedCount = Number(b.requestedCount);
+    if ('details' in b) fields.details = b.details;
+    await updateRequestFields(request.id, fields);
+    return res.json({ ...request, ...fields });
+  }
+
+  // ----- Status mode -----
+  const next = b.status;
   if (!['Pending', 'Approved', 'Rejected', 'Completed'].includes(next)) {
     return res.status(400).json({ error: 'Invalid status' });
   }
   const completionDate = next === 'Pending' ? null : today();
   await updateRequestStatus(request.id, next, completionDate);
 
-  if (next === 'Completed' && request.type !== 'renewal') {
-    await bumpClientTotal(request.requestedCount, request.clientId);
-    await insertHistory({
-      id: newId('h'), clientId: request.clientId, date: completionDate, action: 'purchase',
-      detail: `Request ${request.id} completed — added ${request.requestedCount} licenses`,
-      changedBy: req.user.name, licenseDelta: request.requestedCount,
-    });
-  } else if (next === 'Completed') {
+  // On APPROVAL, the requested licenses are added to the system immediately.
+  if (next === 'Approved' && request.type !== 'renewal') {
+    if (request.category === 'ic') {
+      await bumpTrainingOrdered(request.clientId, request.requestedCount);
+      await insertHistory({
+        id: newId('h'), clientId: request.clientId, date: completionDate, action: 'purchase',
+        detail: `Request ${request.id} approved — added ${request.requestedCount} IC Training seats`,
+        changedBy: req.user.name, licenseDelta: request.requestedCount,
+      });
+    } else {
+      await bumpClientTotal(request.requestedCount, request.clientId);
+      await insertHistory({
+        id: newId('h'), clientId: request.clientId, date: completionDate, action: 'purchase',
+        detail: `Request ${request.id} approved — added ${request.requestedCount} licenses`,
+        changedBy: req.user.name, licenseDelta: request.requestedCount,
+      });
+    }
+  } else if (next === 'Approved' && request.type === 'renewal') {
     await insertHistory({
       id: newId('h'), clientId: request.clientId, date: completionDate, action: 'renewal',
-      detail: `Renewal request ${request.id} completed`, changedBy: req.user.name, licenseDelta: 0,
+      detail: `Renewal request ${request.id} approved`, changedBy: req.user.name, licenseDelta: 0,
     });
   }
 
-  // Notify the client of the decision (approve/reject/complete).
+  // Notify the client of the decision.
   if (['Approved', 'Rejected', 'Completed'].includes(next)) {
     try {
       const client = await getClient(request.clientId);

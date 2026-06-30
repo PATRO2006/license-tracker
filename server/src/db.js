@@ -54,6 +54,24 @@ export async function initDb() {
     database = fs.existsSync(DB_FILE) ? new SQL.Database(fs.readFileSync(DB_FILE)) : new SQL.Database();
     await createSchema('sqlite');
   }
+  await migrate();
+}
+
+// Schema migrations for databases created before a column existed.
+// Each ALTER is run independently and ignored if it fails (column already there).
+async function migrate() {
+  const alters = [
+    USE_PG
+      ? `ALTER TABLE requests ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'employee'`
+      : `ALTER TABLE requests ADD COLUMN category TEXT DEFAULT 'employee'`,
+  ];
+  for (const a of alters) {
+    try {
+      if (USE_PG) await pool.query(a);
+      else database.run(a);
+    } catch { /* column already exists */ }
+  }
+  if (!USE_PG) persist();
 }
 
 function persist() {
@@ -113,7 +131,7 @@ async function createSchema(kind) {
       trainingCompleted INTEGER DEFAULT 0, date TEXT
     )`,
     `CREATE TABLE IF NOT EXISTS requests (
-      id TEXT PRIMARY KEY, clientId TEXT NOT NULL, type TEXT,
+      id TEXT PRIMARY KEY, clientId TEXT NOT NULL, type TEXT, category TEXT DEFAULT 'employee',
       requestedCount INTEGER DEFAULT 0, currentCount INTEGER DEFAULT 0, details TEXT,
       status TEXT DEFAULT 'Pending', requestDate TEXT, completionDate TEXT
     )`,
@@ -155,10 +173,22 @@ export const insertTraining = (t) => run(
   [t.clientId, t.ordered, t.used, t.trainingCompleted, t.date]
 );
 export const insertRequest = (r) => run(
-  `INSERT INTO requests (id,clientId,type,requestedCount,currentCount,details,status,requestDate,completionDate)
-   VALUES (?,?,?,?,?,?,?,?,?)`,
-  [r.id, r.clientId, r.type, r.requestedCount, r.currentCount, r.details, r.status, r.requestDate, r.completionDate]
+  `INSERT INTO requests (id,clientId,type,category,requestedCount,currentCount,details,status,requestDate,completionDate)
+   VALUES (?,?,?,?,?,?,?,?,?,?)`,
+  [r.id, r.clientId, r.type, r.category || 'employee', r.requestedCount, r.currentCount, r.details, r.status, r.requestDate, r.completionDate]
 );
+// Add ordered IC-training seats to a client (creates a training row if none exists).
+export const bumpTrainingOrdered = async (clientId, delta) => {
+  const existing = await get('SELECT id FROM training WHERE clientId = ?', [clientId]);
+  if (existing) await run('UPDATE training SET ordered = ordered + ? WHERE clientId = ?', [delta, clientId]);
+  else await run('INSERT INTO training (clientId,ordered,used,trainingCompleted,date) VALUES (?,?,?,?,?)', [clientId, delta, 0, 0, null]);
+};
+export const updateRequestFields = (id, fields) => {
+  const cols = Object.keys(fields);
+  if (cols.length === 0) return Promise.resolve();
+  const set = cols.map((c) => `${c} = ?`).join(', ');
+  return run(`UPDATE requests SET ${set} WHERE id = ?`, [...cols.map((c) => fields[c]), id]);
+};
 export const insertHistory = (h) => run(
   'INSERT INTO history (id,clientId,date,action,detail,changedBy,licenseDelta) VALUES (?,?,?,?,?,?,?)',
   [h.id, h.clientId, h.date, h.action, h.detail, h.changedBy, h.licenseDelta]

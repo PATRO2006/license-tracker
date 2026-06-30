@@ -47,5 +47,7 @@ export const api = {
   createRequest: (body) => req('/requests', { method: 'POST', body: JSON.stringify(body) }),
   updateRequest: (id, status) =>
     req(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  editRequest: (id, body) =>
+    req(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   outbox: () => req('/outbox'),
 };
