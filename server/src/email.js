@@ -11,8 +11,11 @@ import nodemailer from 'nodemailer';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUTBOX_PATH = path.join(__dirname, '..', 'data', 'outbox.json');
 
-// Recipient per requirements: the admin support address.
+// Recipients:
+//   • License requests (Employee Training)      → support@safespacesinc.in
+//   • Onboarding (IC Training + new clients)     → tech.support@safespacesinc.in
 const NOTIFY_TO = process.env.NOTIFY_EMAIL || 'support@safespacesinc.in';
+const ONBOARDING_TO = process.env.ONBOARDING_EMAIL || 'tech.support@safespacesinc.in';
 const FROM = process.env.SMTP_FROM || 'license-tracker@example.com';
 
 let transporter = null;
@@ -67,11 +70,14 @@ const TYPE_LABEL = {
 };
 
 export async function sendRequestNotification({ client, request }) {
-  const subject = `[License Request] ${TYPE_LABEL[request.type] || 'License request'} — ${client.name}`;
+  const isOnboarding = request.category === 'ic';
+  const recipient = isOnboarding ? ONBOARDING_TO : NOTIFY_TO;
+  const kind = isOnboarding ? 'Onboarding / IC Training request' : (TYPE_LABEL[request.type] || 'License request');
+  const subject = `[${isOnboarding ? 'Onboarding' : 'License Request'}] ${kind} — ${client.name}`;
   const text = renderBody({ client, request });
 
   const message = {
-    to: NOTIFY_TO,
+    to: recipient,
     from: FROM,
     subject,
     text,
@@ -88,10 +94,41 @@ export async function sendRequestNotification({ client, request }) {
 
   if (transporter) {
     await transporter.sendMail(message);
-    console.log(`[email] sent to ${NOTIFY_TO}: ${subject}`);
+    console.log(`[email] sent to ${recipient}: ${subject}`);
   } else {
     appendOutbox(message);
-    console.log(`[email:outbox] queued to ${NOTIFY_TO}: ${subject}`);
+    console.log(`[email:outbox] queued to ${recipient}: ${subject}`);
+  }
+  return message;
+}
+
+// Sent to tech.support when a NEW client is onboarded (admin "Add client").
+export async function sendOnboardingNotification({ client }) {
+  const subject = `[Onboarding] New client onboarded — ${client.name}`;
+  const text = [
+    `A new client has been onboarded into the License Tracking System.`,
+    ``,
+    `Client Name:      ${client.name}`,
+    `Contact Person:   ${client.contact || '—'}`,
+    `Contact Email:    ${client.contactEmail || '—'}`,
+    `Licenses Ordered: ${client.totalPurchased}`,
+    `Onboarded On:     ${client.sharedOn || new Date().toISOString().slice(0, 10)}`,
+    ``,
+    `— License Tracking System`,
+  ].join('\n');
+
+  const message = {
+    to: ONBOARDING_TO, from: FROM, subject, text,
+    sentAt: new Date().toISOString(),
+    meta: { kind: 'onboarding', clientName: client.name },
+  };
+
+  if (transporter) {
+    await transporter.sendMail(message);
+    console.log(`[email] onboarding sent to ${ONBOARDING_TO}: ${subject}`);
+  } else {
+    appendOutbox(message);
+    console.log(`[email:outbox] onboarding queued to ${ONBOARDING_TO}: ${subject}`);
   }
   return message;
 }

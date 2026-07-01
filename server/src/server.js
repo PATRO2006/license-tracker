@@ -12,7 +12,7 @@ import {
   bumpTrainingOrdered, updateRequestFields,
 } from './db.js';
 import { enrichClient, buildDashboard } from './logic.js';
-import { sendRequestNotification, sendDecisionNotification, readOutbox } from './email.js';
+import { sendRequestNotification, sendDecisionNotification, sendOnboardingNotification, readOutbox } from './email.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -137,8 +137,12 @@ app.post('/api/clients', authRequired, adminOnly, async (req, res) => {
     passwordHash: bcrypt.hashSync(password, 10), role: 'client', clientId: id, initials,
   });
 
+  // Onboarding notification → tech.support@
+  const created = await getClient(id);
+  try { await sendOnboardingNotification({ client: created }); } catch (e) { console.error('[email] onboarding', e.message); }
+
   res.status(201).json({
-    client: enrichClient(await getClient(id), await getRequests(), await getTraining()),
+    client: enrichClient(created, await getRequests(), await getTraining()),
     credentials: { username: id, password },
   });
 });
