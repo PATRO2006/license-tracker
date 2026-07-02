@@ -70,10 +70,10 @@ const TYPE_LABEL = {
 };
 
 export async function sendRequestNotification({ client, request }) {
-  const isOnboarding = request.category === 'ic';
-  const recipient = isOnboarding ? ONBOARDING_TO : NOTIFY_TO;
-  const kind = isOnboarding ? 'Onboarding / IC Training request' : (TYPE_LABEL[request.type] || 'License request');
-  const subject = `[${isOnboarding ? 'Onboarding' : 'License Request'}] ${kind} — ${client.name}`;
+  // All license requests (Employee Training AND IC Training) go to support@.
+  const recipient = NOTIFY_TO;
+  const catLabel = request.category === 'ic' ? 'IC Training' : 'Employee Training';
+  const subject = `[License Request] ${catLabel} — ${TYPE_LABEL[request.type] || 'request'} — ${client.name}`;
   const text = renderBody({ client, request });
 
   const message = {
@@ -166,6 +166,38 @@ export async function sendDecisionNotification({ client, request, decision }) {
   } else {
     appendOutbox(message);
     console.log(`[email:outbox] decision queued to ${to}: ${subject}`);
+  }
+  return message;
+}
+
+// Sent to tech.support when a CLIENT onboards a new user (no license change).
+export async function sendUserOnboardingNotification({ client, onboarding }) {
+  const subject = `[Onboarding] New user onboarded — ${client.name}`;
+  const text = [
+    `A client has onboarded a new user.`,
+    ``,
+    `Client:        ${client.name}`,
+    `Username:      ${onboarding.username || '—'}`,
+    `First Name:    ${onboarding.firstName || '—'}`,
+    `Last Name:     ${onboarding.lastName || '—'}`,
+    `Email:         ${onboarding.email || '—'}`,
+    `Joining Date:  ${onboarding.joiningDate || '—'}`,
+    ``,
+    `— License Tracking System`,
+  ].join('\n');
+
+  const message = {
+    to: ONBOARDING_TO, from: FROM, subject, text,
+    sentAt: new Date().toISOString(),
+    meta: { kind: 'user-onboarding', clientName: client.name, username: onboarding.username },
+  };
+
+  if (transporter) {
+    await transporter.sendMail(message);
+    console.log(`[email] user onboarding sent to ${ONBOARDING_TO}: ${subject}`);
+  } else {
+    appendOutbox(message);
+    console.log(`[email:outbox] user onboarding queued to ${ONBOARDING_TO}: ${subject}`);
   }
   return message;
 }

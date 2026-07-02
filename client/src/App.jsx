@@ -10,6 +10,7 @@ import ClientDetail from './pages/ClientDetail.jsx';
 import Requests from './pages/Requests.jsx';
 import Notifications from './pages/Notifications.jsx';
 import ClientHome from './pages/ClientHome.jsx';
+import TrainingReport from './pages/TrainingReport.jsx';
 
 export default function App() {
   const { user } = useAuth();
@@ -40,6 +41,7 @@ export default function App() {
               <Route path="/clients" element={<Clients key={refreshKey} notify={notify} onChange={refresh} />} />
               <Route path="/clients/:id" element={<ClientDetail key={refreshKey} notify={notify} onChange={refresh} />} />
               <Route path="/requests" element={<Requests key={refreshKey} notify={notify} onChange={refresh} />} />
+              <Route path="/training-report" element={<TrainingReport key={refreshKey} />} />
               <Route path="/notifications" element={<Notifications key={refreshKey} />} />
             </>
           ) : (

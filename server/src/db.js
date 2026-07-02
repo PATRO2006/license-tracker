@@ -33,6 +33,7 @@ const PG_KEYMAP = {
   licensethreshold: 'licenseThreshold', clientid: 'clientId', requestedcount: 'requestedCount',
   currentcount: 'currentCount', requestdate: 'requestDate', completiondate: 'completionDate',
   licensedelta: 'licenseDelta', changedby: 'changedBy',
+  firstname: 'firstName', lastname: 'lastName', joiningdate: 'joiningDate', createdat: 'createdAt',
 };
 function remapRow(row) {
   const out = {};
@@ -143,6 +144,10 @@ async function createSchema(kind) {
       id TEXT PRIMARY KEY, name TEXT NOT NULL, username TEXT UNIQUE, email TEXT,
       passwordHash TEXT NOT NULL, role TEXT NOT NULL, clientId TEXT, initials TEXT
     )`,
+    `CREATE TABLE IF NOT EXISTS onboardings (
+      id TEXT PRIMARY KEY, clientId TEXT NOT NULL, username TEXT, firstName TEXT,
+      lastName TEXT, email TEXT, joiningDate TEXT, createdAt TEXT
+    )`,
   ];
   await execRaw(stmts);
 }
@@ -157,6 +162,9 @@ export const getUserByLogin = (id) =>
   get('SELECT * FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)', [id, id]);
 export const getUserById = (id) => get('SELECT * FROM users WHERE id = ?', [id]);
 export const getRequestById = (id) => get('SELECT * FROM requests WHERE id = ?', [id]);
+export const getOnboardings = () => all('SELECT * FROM onboardings');
+export const getOnboardingsForClient = (clientId) =>
+  all('SELECT * FROM onboardings WHERE clientId = ? ORDER BY createdAt DESC', [clientId]);
 
 // ---------- Writes ----------
 export const insertClient = (c) => run(
@@ -196,6 +204,10 @@ export const insertHistory = (h) => run(
 export const insertUser = (u) => run(
   'INSERT INTO users (id,name,username,email,passwordHash,role,clientId,initials) VALUES (?,?,?,?,?,?,?,?)',
   [u.id, u.name, u.username, u.email, u.passwordHash, u.role, u.clientId, u.initials]
+);
+export const insertOnboarding = (o) => run(
+  'INSERT INTO onboardings (id,clientId,username,firstName,lastName,email,joiningDate,createdAt) VALUES (?,?,?,?,?,?,?,?)',
+  [o.id, o.clientId, o.username, o.firstName, o.lastName, o.email, o.joiningDate, o.createdAt]
 );
 export const updateRequestStatus = (id, status, completionDate) =>
   run('UPDATE requests SET status = ?, completionDate = ? WHERE id = ?', [status, completionDate, id]);

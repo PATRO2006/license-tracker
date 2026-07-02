@@ -65,6 +65,38 @@ export function CapacityGauge({ percent, ordered, used }) {
   );
 }
 
+// Compact training panel with its own capacity gauge — used to show
+// Employee Training and IC Training side by side as a comparison.
+export function TrainingPanel({ title, ordered, used, completed, note }) {
+  const pct = ordered > 0 ? Math.round((used / ordered) * 1000) / 10 : 0;
+  const available = ordered - used;
+  const radius = 70;
+  const circ = Math.PI * radius;
+  const dash = (Math.min(pct, 100) / 100) * circ;
+  const over = pct > 100;
+  const color = over ? 'var(--over-fg)' : pct >= 95 ? 'var(--capacity-fg)' : pct >= 80 ? 'var(--warning-fg)' : 'var(--healthy-fg)';
+  return (
+    <div className="card detail-section" style={{ textAlign: 'center' }}>
+      <h3 style={{ textAlign: 'left' }}>{title}</h3>
+      <svg width="170" height="96" viewBox="0 0 180 100" style={{ display: 'block', margin: '0 auto' }}>
+        <path d="M 16 92 A 70 70 0 0 1 164 92" fill="none" stroke="var(--bg)" strokeWidth="15" strokeLinecap="round" />
+        <path d="M 16 92 A 70 70 0 0 1 164 92" fill="none" stroke={color} strokeWidth="15" strokeLinecap="round" strokeDasharray={`${dash} ${circ}`} />
+      </svg>
+      <div style={{ marginTop: -40 }}>
+        <div style={{ fontSize: 24, fontWeight: 800, color }}>{pct}%</div>
+        <div className="muted" style={{ fontSize: 11, letterSpacing: '.05em', textTransform: 'uppercase', fontWeight: 600 }}>Capacity</div>
+      </div>
+      <div className="kv" style={{ marginTop: 20 }}>
+        <div className="box"><div className="k">Ordered</div><div className="v">{ordered}</div></div>
+        <div className="box"><div className="k">Used</div><div className="v">{used}</div></div>
+        <div className={`box${available < 0 ? ' danger' : ''}`}><div className="k">Available</div><div className="v">{available}</div></div>
+      </div>
+      {completed !== undefined && completed !== null && <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>Training completed: <b style={{ color: 'var(--text)' }}>{completed}</b></div>}
+      {note && <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{note}</div>}
+    </div>
+  );
+}
+
 export function Sidebar({ pendingCount, notify }) {
   const { user, logout } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -84,6 +116,7 @@ export function Sidebar({ pendingCount, notify }) {
               <Icon name="requests" /> Requests
               {pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}
             </NavLink>
+            <NavLink to="/training-report" className={link}><Icon name="history" /> Training Report</NavLink>
             <NavLink to="/notifications" className={link}><Icon name="bell" /> Notifications</NavLink>
           </>
         ) : (

@@ -30,6 +30,22 @@ cd server
 DATABASE_URL=... npm run seed
 ```
 
+## Backups
+
+Your production data (Neon Postgres) is backed up two ways:
+
+- **Automatic** — Neon takes continuous backups with point-in-time restore. On the
+  free tier this keeps a short history window; paid plans extend it to days/weeks.
+  Manage/restore from the Neon dashboard.
+- **On-demand** — run the included script to save a snapshot you can keep or share:
+
+  ```bash
+  DATABASE_URL="postgresql://…" ./db/backup.sh
+  # → db/backups/backup-YYYYMMDD-HHMMSS.sql   (restore: psql "$DATABASE_URL" -f <file>)
+  ```
+
+  Without `DATABASE_URL` it copies the local SQLite file instead.
+
 ## Re-seeding / reset
 
 `npm run seed` (from `server/`) clears and reloads the 12 clients, IC-training rows,

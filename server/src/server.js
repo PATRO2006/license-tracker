@@ -10,9 +10,14 @@ import {
   insertClient, insertUser, insertRequest, insertHistory,
   updateRequestStatus, bumpClientTotal, updateUserPassword, updateClientFields,
   bumpTrainingOrdered, updateRequestFields,
+  insertOnboarding, getOnboardingsForClient,
 } from './db.js';
 import { enrichClient, buildDashboard } from './logic.js';
-import { sendRequestNotification, sendDecisionNotification, sendOnboardingNotification, readOutbox } from './email.js';
+import { getTrainingReport } from './trainingReport.js';
+import {
+  sendRequestNotification, sendDecisionNotification, sendOnboardingNotification,
+  sendUserOnboardingNotification, readOutbox,
+} from './email.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -56,6 +61,7 @@ const canAccessClient = (user, clientId) => user.role === 'admin' || user.client
 async function withHistory(enriched) {
   const h = await getHistory();
   enriched.history = h.filter((x) => x.clientId === enriched.id).sort((a, b) => (a.date < b.date ? 1 : -1));
+  enriched.onboardings = await getOnboardingsForClient(enriched.id);
   return enriched;
 }
 
@@ -247,6 +253,40 @@ app.patch('/api/requests/:id', authRequired, adminOnly, async (req, res) => {
   }
   res.json({ ...request, status: next, completionDate });
 });
+
+// ---------- Onboarding (a client onboards a new user) ----------
+// Captures the user's details and emails tech.support@. No license change.
+app.post('/api/onboard', authRequired, async (req, res) => {
+  const b = req.body || {};
+  const clientId = req.user.role === 'admin' ? b.clientId : req.user.clientId;
+  const client = await getClient(clientId);
+  if (!client) return res.status(400).json({ error: 'Unknown client' });
+  if (!b.username && !b.email) return res.status(400).json({ error: 'username or email is required' });
+
+  const onboarding = {
+    id: newId('ob'), clientId,
+    username: b.username || null, firstName: b.firstName || null, lastName: b.lastName || null,
+    email: b.email || null, joiningDate: b.joiningDate || null, createdAt: today(),
+  };
+  await insertOnboarding(onboarding);
+
+  let emailed = false;
+  try { emailed = !!(await sendUserOnboardingNotification({ client, onboarding })); } catch (e) { console.error('[email] onboarding-user', e.message); }
+  res.status(201).json({ onboarding, emailed });
+});
+
+app.get('/api/onboardings', authRequired, async (req, res) => {
+  const clientId = req.user.role === 'admin' ? (req.query.clientId || null) : req.user.clientId;
+  if (!clientId) {
+    // admin, no filter → all
+    const { getOnboardings } = await import('./db.js');
+    return res.json(await getOnboardings());
+  }
+  res.json(await getOnboardingsForClient(clientId));
+});
+
+// ---------- Training report (admin only) ----------
+app.get('/api/training-report', authRequired, adminOnly, (req, res) => res.json(getTrainingReport()));
 
 // ---------- Misc ----------
 app.get('/api/outbox', authRequired, adminOnly, async (req, res) => res.json(readOutbox()));

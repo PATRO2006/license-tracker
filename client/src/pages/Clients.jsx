@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { StatusChip } from '../components.jsx';
 import RequestModal from './RequestModal.jsx';
 import AddClientModal from './AddClientModal.jsx';
+import { downloadClientsReport } from '../report.js';
 
 export default function Clients({ notify, onChange }) {
   const [clients, setClients] = useState([]);
@@ -25,6 +26,7 @@ export default function Clients({ notify, onChange }) {
           <div className="sub">{clients.length} accounts under management</div>
         </div>
         <div className="row" style={{ gap: 10 }}>
+          <button className="btn" onClick={() => downloadClientsReport(clients)} disabled={!clients.length}>Download report</button>
           <button className="btn" onClick={() => setShowRequest(true)}>+ New request</button>
           <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add client</button>
         </div>

@@ -49,5 +49,8 @@ export const api = {
     req(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   editRequest: (id, body) =>
     req(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  trainingReport: () => req('/training-report'),
+  onboardUser: (body) => req('/onboard', { method: 'POST', body: JSON.stringify(body) }),
+  onboardings: (clientId) => req(`/onboardings${clientId ? `?clientId=${clientId}` : ''}`),
   outbox: () => req('/outbox'),
 };
