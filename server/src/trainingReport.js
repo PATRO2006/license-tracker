@@ -1,5 +1,6 @@
-// Loads the POSH Employee Training progress report (admin-only view).
-// Parsed once from the bundled CSV.
+// POSH Employee Training progress report.
+// The bundled CSV is the default; on first boot it seeds the training_report
+// table, after which the admin can replace it by uploading a new CSV.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +8,6 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CSV_PATH = path.join(__dirname, '..', 'assets', 'posh-training.csv');
 
-// Minimal quoted-CSV row parser.
 function parseLine(line) {
   const out = [];
   let cur = '';
@@ -26,28 +26,29 @@ function parseLine(line) {
   return out;
 }
 
-let cache = null;
-
-export function getTrainingReport() {
-  if (cache) return cache;
-  let rows = [];
+// Rows from the bundled CSV (used to seed the table on first run).
+export function loadBundledRows() {
   try {
     const text = fs.readFileSync(CSV_PATH, 'utf-8').replace(/\r/g, '');
     const lines = text.split('\n').filter((l) => l.trim().length);
-    rows = lines.slice(1).map((l) => {
+    return lines.slice(1).map((l) => {
       const [name, email, status, date] = parseLine(l);
       return { name: name || '', email: email || '', status: status || '', date: date || '' };
     });
   } catch (e) {
     console.error('[training-report] could not load CSV:', e.message);
+    return [];
   }
-  const completed = rows.filter((r) => r.status.trim().toLowerCase() === 'completed').length;
-  cache = {
+}
+
+// Summary + rows in the shape the frontend expects.
+export function buildReportStats(rows) {
+  const completed = rows.filter((r) => (r.status || '').trim().toLowerCase() === 'completed').length;
+  return {
     title: 'POSH Employee Training',
     total: rows.length,
     completed,
     notCompleted: rows.length - completed,
     rows,
   };
-  return cache;
 }

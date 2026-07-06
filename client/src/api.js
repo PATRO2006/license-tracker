@@ -50,6 +50,7 @@ export const api = {
   editRequest: (id, body) =>
     req(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   trainingReport: () => req('/training-report'),
+  uploadTrainingReport: (rows) => req('/training-report', { method: 'POST', body: JSON.stringify({ rows }) }),
   onboardUser: (body) => req('/onboard', { method: 'POST', body: JSON.stringify(body) }),
   onboardUsersBulk: (users) => req('/onboard-bulk', { method: 'POST', body: JSON.stringify({ users }) }),
   onboardings: (clientId) => req(`/onboardings${clientId ? `?clientId=${clientId}` : ''}`),

@@ -65,6 +65,9 @@ async function migrate() {
     USE_PG
       ? `ALTER TABLE requests ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'employee'`
       : `ALTER TABLE requests ADD COLUMN category TEXT DEFAULT 'employee'`,
+    USE_PG
+      ? `ALTER TABLE onboardings ADD COLUMN IF NOT EXISTS institution TEXT`
+      : `ALTER TABLE onboardings ADD COLUMN institution TEXT`,
   ];
   for (const a of alters) {
     try {
@@ -146,7 +149,10 @@ async function createSchema(kind) {
     )`,
     `CREATE TABLE IF NOT EXISTS onboardings (
       id TEXT PRIMARY KEY, clientId TEXT NOT NULL, username TEXT, firstName TEXT,
-      lastName TEXT, email TEXT, joiningDate TEXT, createdAt TEXT
+      lastName TEXT, email TEXT, institution TEXT, joiningDate TEXT, createdAt TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS training_report (
+      id ${auto}, name TEXT, email TEXT, status TEXT, date TEXT
     )`,
   ];
   await execRaw(stmts);
@@ -162,6 +168,14 @@ export const getUserByLogin = (id) =>
   get('SELECT * FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)', [id, id]);
 export const getUserById = (id) => get('SELECT * FROM users WHERE id = ?', [id]);
 export const getRequestById = (id) => get('SELECT * FROM requests WHERE id = ?', [id]);
+export const getReportRows = () => all('SELECT name, email, status, date FROM training_report ORDER BY id');
+export const replaceReportRows = async (rows) => {
+  await run('DELETE FROM training_report');
+  for (const r of rows) {
+    await run('INSERT INTO training_report (name,email,status,date) VALUES (?,?,?,?)',
+      [r.name || '', r.email || '', r.status || '', r.date || '']);
+  }
+};
 export const getOnboardings = () => all('SELECT * FROM onboardings');
 export const getOnboardingsForClient = (clientId) =>
   all('SELECT * FROM onboardings WHERE clientId = ? ORDER BY createdAt DESC', [clientId]);
@@ -206,8 +220,8 @@ export const insertUser = (u) => run(
   [u.id, u.name, u.username, u.email, u.passwordHash, u.role, u.clientId, u.initials]
 );
 export const insertOnboarding = (o) => run(
-  'INSERT INTO onboardings (id,clientId,username,firstName,lastName,email,joiningDate,createdAt) VALUES (?,?,?,?,?,?,?,?)',
-  [o.id, o.clientId, o.username, o.firstName, o.lastName, o.email, o.joiningDate, o.createdAt]
+  'INSERT INTO onboardings (id,clientId,username,firstName,lastName,email,institution,joiningDate,createdAt) VALUES (?,?,?,?,?,?,?,?,?)',
+  [o.id, o.clientId, o.username, o.firstName, o.lastName, o.email, o.institution, o.joiningDate, o.createdAt]
 );
 export const updateRequestStatus = (id, status, completionDate) =>
   run('UPDATE requests SET status = ?, completionDate = ? WHERE id = ?', [status, completionDate, id]);

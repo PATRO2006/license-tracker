@@ -181,6 +181,7 @@ export async function sendUserOnboardingNotification({ client, onboarding }) {
     `First Name:    ${onboarding.firstName || '—'}`,
     `Last Name:     ${onboarding.lastName || '—'}`,
     `Email:         ${onboarding.email || '—'}`,
+    `Institution:   ${onboarding.institution || '—'}`,
     `Joining Date:  ${onboarding.joiningDate || '—'}`,
     ``,
     `— License Tracking System`,
@@ -207,7 +208,7 @@ export async function sendBulkOnboardingNotification({ client, onboardings }) {
   const subject = `[Onboarding] ${onboardings.length} new user${onboardings.length > 1 ? 's' : ''} onboarded — ${client.name}`;
   const lines = onboardings.map((o, i) => [
     `${i + 1}. ${[o.firstName, o.lastName].filter(Boolean).join(' ') || o.username || '—'}`,
-    `   Username: ${o.username || '—'}   Email: ${o.email || '—'}   Joining: ${o.joiningDate || '—'}`,
+    `   Username: ${o.username || '—'}   Email: ${o.email || '—'}   Institution: ${o.institution || '—'}   Joining: ${o.joiningDate || '—'}`,
   ].join('\n'));
   const text = [
     `A client has onboarded ${onboardings.length} new user(s).`,

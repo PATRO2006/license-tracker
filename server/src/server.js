@@ -11,9 +11,10 @@ import {
   updateRequestStatus, bumpClientTotal, updateUserPassword, updateClientFields,
   bumpTrainingOrdered, updateRequestFields,
   insertOnboarding, getOnboardingsForClient,
+  getReportRows, replaceReportRows,
 } from './db.js';
 import { enrichClient, buildDashboard } from './logic.js';
-import { getTrainingReport } from './trainingReport.js';
+import { buildReportStats, loadBundledRows } from './trainingReport.js';
 import {
   sendRequestNotification, sendDecisionNotification, sendOnboardingNotification,
   sendUserOnboardingNotification, sendBulkOnboardingNotification, readOutbox,
@@ -36,6 +37,11 @@ if ((await getClients()).length === 0) {
   console.log(`Database seeded (${USE_PG ? 'PostgreSQL' : 'SQLite'}).`);
 } else {
   console.log(`Database ready (${USE_PG ? 'PostgreSQL' : 'SQLite'}).`);
+}
+// Seed the training report from the bundled CSV on first run.
+if ((await getReportRows()).length === 0) {
+  await replaceReportRows(loadBundledRows());
+  console.log('Training report seeded from bundled CSV.');
 }
 
 // ---------- Auth helpers ----------
@@ -266,7 +272,7 @@ app.post('/api/onboard', authRequired, async (req, res) => {
   const onboarding = {
     id: newId('ob'), clientId,
     username: b.username || null, firstName: b.firstName || null, lastName: b.lastName || null,
-    email: b.email || null, joiningDate: b.joiningDate || null, createdAt: today(),
+    email: b.email || null, institution: b.institution || null, joiningDate: b.joiningDate || null, createdAt: today(),
   };
   await insertOnboarding(onboarding);
 
@@ -289,7 +295,7 @@ app.post('/api/onboard-bulk', authRequired, async (req, res) => {
     const onboarding = {
       id: newId('ob'), clientId,
       username: u.username || null, firstName: u.firstName || null, lastName: u.lastName || null,
-      email: u.email || null, joiningDate: u.joiningDate || null, createdAt: today(),
+      email: u.email || null, institution: u.institution || null, joiningDate: u.joiningDate || null, createdAt: today(),
     };
     await insertOnboarding(onboarding);
     created.push(onboarding);
@@ -311,7 +317,17 @@ app.get('/api/onboardings', authRequired, async (req, res) => {
 });
 
 // ---------- Training report (admin only) ----------
-app.get('/api/training-report', authRequired, adminOnly, (req, res) => res.json(getTrainingReport()));
+app.get('/api/training-report', authRequired, adminOnly, async (req, res) => {
+  res.json(buildReportStats(await getReportRows()));
+});
+
+// Admin uploads a new report (replaces the current data). Body: { rows: [{name,email,status,date}] }
+app.post('/api/training-report', authRequired, adminOnly, async (req, res) => {
+  const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
+  if (!rows || rows.length === 0) return res.status(400).json({ error: 'No rows provided' });
+  await replaceReportRows(rows.map((r) => ({ name: r.name || '', email: r.email || '', status: r.status || '', date: r.date || '' })));
+  res.json(buildReportStats(await getReportRows()));
+});
 
 // ---------- Misc ----------
 app.get('/api/outbox', authRequired, adminOnly, async (req, res) => res.json(readOutbox()));
