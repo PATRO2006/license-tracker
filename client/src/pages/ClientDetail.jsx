@@ -4,7 +4,7 @@ import { api } from '../api.js';
 import { StatusChip, TrainingPanel } from '../components.jsx';
 import RequestModal from './RequestModal.jsx';
 import EditClientModal from './EditClientModal.jsx';
-import { downloadClientReport } from '../report.js';
+import { downloadClientReport, downloadUsersReport } from '../report.js';
 
 function Banner({ status, notes }) {
   if (status === 'Expired') return <div className="banner alert">⚠ Contract expired — renewal required before licenses can be reactivated.</div>;
@@ -113,7 +113,12 @@ export default function ClientDetail({ notify, onChange }) {
             )}
 
             <div className="card detail-section">
-              <h3>Onboarded Users</h3>
+              <div className="spread" style={{ marginBottom: 14 }}>
+                <h3 style={{ margin: 0 }}>Onboarded Users</h3>
+                {c.onboardings && c.onboardings.length > 0 && (
+                  <button className="btn btn-sm" onClick={() => downloadUsersReport(c.name, c.onboardings)}>Download users CSV</button>
+                )}
+              </div>
               {(!c.onboardings || c.onboardings.length === 0) ? (
                 <div className="muted">No users onboarded yet.</div>
               ) : (

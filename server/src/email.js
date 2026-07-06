@@ -202,6 +202,39 @@ export async function sendUserOnboardingNotification({ client, onboarding }) {
   return message;
 }
 
+// Sent to tech.support when a client onboards MULTIPLE users at once.
+export async function sendBulkOnboardingNotification({ client, onboardings }) {
+  const subject = `[Onboarding] ${onboardings.length} new user${onboardings.length > 1 ? 's' : ''} onboarded — ${client.name}`;
+  const lines = onboardings.map((o, i) => [
+    `${i + 1}. ${[o.firstName, o.lastName].filter(Boolean).join(' ') || o.username || '—'}`,
+    `   Username: ${o.username || '—'}   Email: ${o.email || '—'}   Joining: ${o.joiningDate || '—'}`,
+  ].join('\n'));
+  const text = [
+    `A client has onboarded ${onboardings.length} new user(s).`,
+    ``,
+    `Client: ${client.name}`,
+    ``,
+    ...lines,
+    ``,
+    `— License Tracking System`,
+  ].join('\n');
+
+  const message = {
+    to: ONBOARDING_TO, from: FROM, subject, text,
+    sentAt: new Date().toISOString(),
+    meta: { kind: 'user-onboarding-bulk', clientName: client.name, count: onboardings.length },
+  };
+
+  if (transporter) {
+    await transporter.sendMail(message);
+    console.log(`[email] bulk onboarding sent to ${ONBOARDING_TO}: ${subject}`);
+  } else {
+    appendOutbox(message);
+    console.log(`[email:outbox] bulk onboarding queued to ${ONBOARDING_TO}: ${subject}`);
+  }
+  return message;
+}
+
 export function readOutbox() {
   if (!fs.existsSync(OUTBOX_PATH)) return [];
   try {

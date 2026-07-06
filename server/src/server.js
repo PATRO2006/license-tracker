@@ -16,7 +16,7 @@ import { enrichClient, buildDashboard } from './logic.js';
 import { getTrainingReport } from './trainingReport.js';
 import {
   sendRequestNotification, sendDecisionNotification, sendOnboardingNotification,
-  sendUserOnboardingNotification, readOutbox,
+  sendUserOnboardingNotification, sendBulkOnboardingNotification, readOutbox,
 } from './email.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -273,6 +273,31 @@ app.post('/api/onboard', authRequired, async (req, res) => {
   let emailed = false;
   try { emailed = !!(await sendUserOnboardingNotification({ client, onboarding })); } catch (e) { console.error('[email] onboarding-user', e.message); }
   res.status(201).json({ onboarding, emailed });
+});
+
+// Onboard MULTIPLE users at once. Body: { users: [{username,firstName,lastName,email,joiningDate}, ...] }
+app.post('/api/onboard-bulk', authRequired, async (req, res) => {
+  const b = req.body || {};
+  const clientId = req.user.role === 'admin' ? b.clientId : req.user.clientId;
+  const client = await getClient(clientId);
+  if (!client) return res.status(400).json({ error: 'Unknown client' });
+  const list = Array.isArray(b.users) ? b.users.filter((u) => u && (u.username || u.email)) : [];
+  if (list.length === 0) return res.status(400).json({ error: 'No valid users provided (need username or email)' });
+
+  const created = [];
+  for (const u of list) {
+    const onboarding = {
+      id: newId('ob'), clientId,
+      username: u.username || null, firstName: u.firstName || null, lastName: u.lastName || null,
+      email: u.email || null, joiningDate: u.joiningDate || null, createdAt: today(),
+    };
+    await insertOnboarding(onboarding);
+    created.push(onboarding);
+  }
+
+  let emailed = false;
+  try { emailed = !!(await sendBulkOnboardingNotification({ client, onboardings: created })); } catch (e) { console.error('[email] onboarding-bulk', e.message); }
+  res.status(201).json({ count: created.length, emailed });
 });
 
 app.get('/api/onboardings', authRequired, async (req, res) => {

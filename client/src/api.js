@@ -51,6 +51,7 @@ export const api = {
     req(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   trainingReport: () => req('/training-report'),
   onboardUser: (body) => req('/onboard', { method: 'POST', body: JSON.stringify(body) }),
+  onboardUsersBulk: (users) => req('/onboard-bulk', { method: 'POST', body: JSON.stringify({ users }) }),
   onboardings: (clientId) => req(`/onboardings${clientId ? `?clientId=${clientId}` : ''}`),
   outbox: () => req('/outbox'),
 };

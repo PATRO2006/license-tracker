@@ -60,3 +60,10 @@ export function downloadPoshReport(rows) {
   downloadCsv('posh-employee-training.csv', ['Name', 'Email', 'Status', 'Completed On'],
     rows.map((r) => [r.name, r.email, r.status, r.date]));
 }
+
+// Onboarded users under a specific client.
+export function downloadUsersReport(clientName, onboardings) {
+  const safe = (clientName || 'client').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  downloadCsv(`${safe}-users.csv`, ['First Name', 'Last Name', 'Username', 'Email', 'Joining Date', 'Added On'],
+    (onboardings || []).map((o) => [o.firstName || '', o.lastName || '', o.username || '', o.email || '', o.joiningDate || '', o.createdAt || '']));
+}

@@ -4,7 +4,7 @@ import { useAuth } from '../auth.jsx';
 import { StatusChip, TrainingPanel, Icon } from '../components.jsx';
 import RequestModal from './RequestModal.jsx';
 import OnboardUserModal from './OnboardUserModal.jsx';
-import { downloadClientReport } from '../report.js';
+import { downloadClientReport, downloadUsersReport } from '../report.js';
 
 function Banner({ status, notes }) {
   if (status === 'Over-utilized') return <div className="banner alert"><Icon name="alert" size={16} /> Your usage exceeds the licenses ordered — contact your account manager about adding seats.</div>;
@@ -96,7 +96,12 @@ export default function ClientHome({ notify, onChange }) {
 
           <div className="grid" style={{ gap: 18 }}>
             <div className="card detail-section">
-              <h3>Onboarded Users</h3>
+              <div className="spread" style={{ marginBottom: 14 }}>
+                <h3 style={{ margin: 0 }}>Onboarded Users</h3>
+                {c.onboardings && c.onboardings.length > 0 && (
+                  <button className="btn btn-sm" onClick={() => downloadUsersReport(c.name, c.onboardings)}>Download users CSV</button>
+                )}
+              </div>
               {(!c.onboardings || c.onboardings.length === 0) ? (
                 <div className="muted">No users onboarded yet. Use “Onboard user” to add one.</div>
               ) : (
