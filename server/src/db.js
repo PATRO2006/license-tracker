@@ -68,6 +68,9 @@ async function migrate() {
     USE_PG
       ? `ALTER TABLE onboardings ADD COLUMN IF NOT EXISTS institution TEXT`
       : `ALTER TABLE onboardings ADD COLUMN institution TEXT`,
+    USE_PG
+      ? `ALTER TABLE training_report ADD COLUMN IF NOT EXISTS clientId TEXT`
+      : `ALTER TABLE training_report ADD COLUMN clientId TEXT`,
   ];
   for (const a of alters) {
     try {
@@ -152,7 +155,7 @@ async function createSchema(kind) {
       lastName TEXT, email TEXT, institution TEXT, joiningDate TEXT, createdAt TEXT
     )`,
     `CREATE TABLE IF NOT EXISTS training_report (
-      id ${auto}, name TEXT, email TEXT, status TEXT, date TEXT
+      id ${auto}, clientId TEXT, name TEXT, email TEXT, status TEXT, date TEXT
     )`,
   ];
   await execRaw(stmts);
@@ -168,12 +171,13 @@ export const getUserByLogin = (id) =>
   get('SELECT * FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)', [id, id]);
 export const getUserById = (id) => get('SELECT * FROM users WHERE id = ?', [id]);
 export const getRequestById = (id) => get('SELECT * FROM requests WHERE id = ?', [id]);
-export const getReportRows = () => all('SELECT name, email, status, date FROM training_report ORDER BY id');
-export const replaceReportRows = async (rows) => {
-  await run('DELETE FROM training_report');
+export const getReportRowsForClient = (clientId) =>
+  all('SELECT name, email, status, date FROM training_report WHERE clientId = ? ORDER BY id', [clientId]);
+export const replaceReportRowsForClient = async (clientId, rows) => {
+  await run('DELETE FROM training_report WHERE clientId = ?', [clientId]);
   for (const r of rows) {
-    await run('INSERT INTO training_report (name,email,status,date) VALUES (?,?,?,?)',
-      [r.name || '', r.email || '', r.status || '', r.date || '']);
+    await run('INSERT INTO training_report (clientId,name,email,status,date) VALUES (?,?,?,?,?)',
+      [clientId, r.name || '', r.email || '', r.status || '', r.date || '']);
   }
 };
 export const getOnboardings = () => all('SELECT * FROM onboardings');

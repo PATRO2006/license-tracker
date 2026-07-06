@@ -49,8 +49,8 @@ export const api = {
     req(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   editRequest: (id, body) =>
     req(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  trainingReport: () => req('/training-report'),
-  uploadTrainingReport: (rows) => req('/training-report', { method: 'POST', body: JSON.stringify({ rows }) }),
+  clientReport: (id) => req(`/clients/${id}/report`),
+  uploadClientReport: (id, rows) => req(`/clients/${id}/report`, { method: 'POST', body: JSON.stringify({ rows }) }),
   onboardUser: (body) => req('/onboard', { method: 'POST', body: JSON.stringify(body) }),
   onboardUsersBulk: (users) => req('/onboard-bulk', { method: 'POST', body: JSON.stringify({ users }) }),
   onboardings: (clientId) => req(`/onboardings${clientId ? `?clientId=${clientId}` : ''}`),

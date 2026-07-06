@@ -11,10 +11,10 @@ import {
   updateRequestStatus, bumpClientTotal, updateUserPassword, updateClientFields,
   bumpTrainingOrdered, updateRequestFields,
   insertOnboarding, getOnboardingsForClient,
-  getReportRows, replaceReportRows,
+  getReportRowsForClient, replaceReportRowsForClient,
 } from './db.js';
 import { enrichClient, buildDashboard } from './logic.js';
-import { buildReportStats, loadBundledRows } from './trainingReport.js';
+import { buildReportStats } from './trainingReport.js';
 import {
   sendRequestNotification, sendDecisionNotification, sendOnboardingNotification,
   sendUserOnboardingNotification, sendBulkOnboardingNotification, readOutbox,
@@ -37,11 +37,6 @@ if ((await getClients()).length === 0) {
   console.log(`Database seeded (${USE_PG ? 'PostgreSQL' : 'SQLite'}).`);
 } else {
   console.log(`Database ready (${USE_PG ? 'PostgreSQL' : 'SQLite'}).`);
-}
-// Seed the training report from the bundled CSV on first run.
-if ((await getReportRows()).length === 0) {
-  await replaceReportRows(loadBundledRows());
-  console.log('Training report seeded from bundled CSV.');
 }
 
 // ---------- Auth helpers ----------
@@ -316,17 +311,21 @@ app.get('/api/onboardings', authRequired, async (req, res) => {
   res.json(await getOnboardingsForClient(clientId));
 });
 
-// ---------- Training report (admin only) ----------
-app.get('/api/training-report', authRequired, adminOnly, async (req, res) => {
-  res.json(buildReportStats(await getReportRows()));
+// ---------- Training report (per client) ----------
+// View a client's report — admin, or that client for their own.
+app.get('/api/clients/:id/report', authRequired, async (req, res) => {
+  if (!canAccessClient(req.user, req.params.id)) return res.status(403).json({ error: 'Forbidden' });
+  res.json(buildReportStats(await getReportRowsForClient(req.params.id)));
 });
 
-// Admin uploads a new report (replaces the current data). Body: { rows: [{name,email,status,date}] }
-app.post('/api/training-report', authRequired, adminOnly, async (req, res) => {
+// Admin uploads a client's report (replaces it). Body: { rows: [{name,email,status,date}] }
+app.post('/api/clients/:id/report', authRequired, adminOnly, async (req, res) => {
+  const client = await getClient(req.params.id);
+  if (!client) return res.status(404).json({ error: 'Client not found' });
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
   if (!rows || rows.length === 0) return res.status(400).json({ error: 'No rows provided' });
-  await replaceReportRows(rows.map((r) => ({ name: r.name || '', email: r.email || '', status: r.status || '', date: r.date || '' })));
-  res.json(buildReportStats(await getReportRows()));
+  await replaceReportRowsForClient(req.params.id, rows.map((r) => ({ name: r.name || '', email: r.email || '', status: r.status || '', date: r.date || '' })));
+  res.json(buildReportStats(await getReportRowsForClient(req.params.id)));
 });
 
 // ---------- Misc ----------

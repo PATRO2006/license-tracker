@@ -55,9 +55,10 @@ export function downloadClientReport(client) {
   downloadCsv(`${safe}-training-report.csv`, HEADERS, [rowFor(client)]);
 }
 
-// POSH per-user training progress report (admin).
-export function downloadPoshReport(rows) {
-  downloadCsv('posh-employee-training.csv', ['Name', 'Email', 'Status', 'Completed On'],
+// POSH per-user training progress report (per client).
+export function downloadPoshReport(rows, clientName) {
+  const safe = (clientName || 'training').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  downloadCsv(`${safe}-training-report.csv`, ['Name', 'Email', 'Status', 'Completed On'],
     rows.map((r) => [r.name, r.email, r.status, r.date]));
 }
 
