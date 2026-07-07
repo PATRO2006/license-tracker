@@ -27,6 +27,12 @@ if (process.env.SMTP_HOST) {
     auth: process.env.SMTP_USER
       ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
       : undefined,
+    // Fail fast instead of hanging if the SMTP port is blocked/unreachable
+    // (some hosts block 465/587). These caps ensure sendMail rejects quickly
+    // and we log a real error rather than leaving a request wedged.
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 }
 

@@ -144,14 +144,13 @@ app.post('/api/clients', authRequired, adminOnly, async (req, res) => {
     passwordHash: bcrypt.hashSync(password, 10), role: 'client', clientId: id, initials,
   });
 
-  // Onboarding notification → tech.support@
   const created = await getClient(id);
-  try { await sendOnboardingNotification({ client: created }); } catch (e) { console.error('[email] onboarding', e.message); }
-
   res.status(201).json({
     client: enrichClient(created, await getRequests(), await getTraining()),
     credentials: { username: id, password },
   });
+  // Onboarding notification → tech.support@ (background, non-blocking)
+  sendOnboardingNotification({ client: created }).catch((e) => console.error('[email] onboarding', e.message));
 });
 
 // Admin: edit client fields (incl. contract dates → enables expiry monitoring).
@@ -190,9 +189,10 @@ app.post('/api/requests', authRequired, async (req, res) => {
   };
   await insertRequest(request);
 
-  let emailQueued = false;
-  try { emailQueued = !!(await sendRequestNotification({ client, request })); } catch (e) { console.error('[email]', e.message); }
-  res.status(201).json({ request, emailQueued });
+  // Respond immediately, then send the notification in the background so a
+  // slow/blocked SMTP connection can never wedge the request submission.
+  res.status(201).json({ request, emailQueued: true });
+  sendRequestNotification({ client, request }).catch((e) => console.error('[email]', e.message));
 });
 
 // Admin only. Two modes:
@@ -245,14 +245,13 @@ app.patch('/api/requests/:id', authRequired, adminOnly, async (req, res) => {
     });
   }
 
-  // Notify the client of the decision.
-  if (['Approved', 'Rejected', 'Completed'].includes(next)) {
-    try {
-      const client = await getClient(request.clientId);
-      await sendDecisionNotification({ client, request, decision: next });
-    } catch (e) { console.error('[email] decision', e.message); }
-  }
   res.json({ ...request, status: next, completionDate });
+  // Notify the client of the decision (background, non-blocking).
+  if (['Approved', 'Rejected', 'Completed'].includes(next)) {
+    getClient(request.clientId)
+      .then((client) => sendDecisionNotification({ client, request, decision: next }))
+      .catch((e) => console.error('[email] decision', e.message));
+  }
 });
 
 // ---------- Onboarding (a client onboards a new user) ----------
@@ -271,9 +270,8 @@ app.post('/api/onboard', authRequired, async (req, res) => {
   };
   await insertOnboarding(onboarding);
 
-  let emailed = false;
-  try { emailed = !!(await sendUserOnboardingNotification({ client, onboarding })); } catch (e) { console.error('[email] onboarding-user', e.message); }
-  res.status(201).json({ onboarding, emailed });
+  res.status(201).json({ onboarding, emailed: true });
+  sendUserOnboardingNotification({ client, onboarding }).catch((e) => console.error('[email] onboarding-user', e.message));
 });
 
 // Onboard MULTIPLE users at once. Body: { users: [{username,firstName,lastName,email,joiningDate}, ...] }
@@ -296,9 +294,8 @@ app.post('/api/onboard-bulk', authRequired, async (req, res) => {
     created.push(onboarding);
   }
 
-  let emailed = false;
-  try { emailed = !!(await sendBulkOnboardingNotification({ client, onboardings: created })); } catch (e) { console.error('[email] onboarding-bulk', e.message); }
-  res.status(201).json({ count: created.length, emailed });
+  res.status(201).json({ count: created.length, emailed: true });
+  sendBulkOnboardingNotification({ client, onboardings: created }).catch((e) => console.error('[email] onboarding-bulk', e.message));
 });
 
 app.get('/api/onboardings', authRequired, async (req, res) => {
