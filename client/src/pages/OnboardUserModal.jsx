@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../api.js';
 
-const blank = () => ({ username: '', firstName: '', lastName: '', email: '', institution: '', joiningDate: '' });
+const blank = () => ({ username: '', firstName: '', lastName: '', email: '', institution: '', joiningDate: '', userType: 'Employee' });
 
 // Parse a pasted/uploaded CSV into user rows. Maps columns by header name
 // (case/spacing-insensitive), so the order doesn't matter.
@@ -28,16 +28,19 @@ function parseCsv(text) {
   const iE = idx(['email', 'emailaddress', 'emailid']);
   const iI = idx(['institution', 'institute', 'org', 'organisation', 'organization']);
   const iJ = idx(['joiningdate', 'joining', 'joindate', 'dateofjoining']);
+  const iT = idx(['type', 'usertype', 'role', 'category']);
   const val = (cols, i) => (i >= 0 && cols[i] !== undefined ? cols[i].trim() : '');
   return lines.slice(1).map((l) => {
     const c = splitLine(l);
-    return { username: val(c, iU), firstName: val(c, iF), lastName: val(c, iL), email: val(c, iE), institution: val(c, iI), joiningDate: val(c, iJ) };
+    const type = /coach/i.test(val(c, iT)) ? 'Coach' : 'Employee';
+    return { username: val(c, iU), firstName: val(c, iF), lastName: val(c, iL), email: val(c, iE), institution: val(c, iI), joiningDate: val(c, iJ), userType: type };
   }).filter((r) => r.username || r.email);
 }
 
 export default function OnboardUserModal({ clientId, onClose, onDone, notify }) {
   const [rows, setRows] = useState([blank()]);
   const [busy, setBusy] = useState(false);
+  const isFittr = clientId === 'fittr'; // Fittr splits users into Employees / Coaches
 
   const setField = (i, k) => (e) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: e.target.value } : r)));
   const addRow = () => setRows((rs) => [...rs, blank()]);
@@ -108,6 +111,14 @@ export default function OnboardUserModal({ clientId, onClose, onDone, notify }) 
             <div className="row" style={{ gap: 10 }}>
               <div className="field" style={{ flex: 1 }}><label>Institution</label><input value={r.institution} onChange={setField(i, 'institution')} /></div>
               <div className="field" style={{ flex: 1 }}><label>Joining date</label><input type="date" value={r.joiningDate} onChange={setField(i, 'joiningDate')} /></div>
+              {isFittr && (
+                <div className="field" style={{ flex: 1 }}><label>Type</label>
+                  <select value={r.userType} onChange={setField(i, 'userType')}>
+                    <option value="Employee">Employee</option>
+                    <option value="Coach">Coach</option>
+                  </select>
+                </div>
+              )}
             </div>
           </div>
         ))}

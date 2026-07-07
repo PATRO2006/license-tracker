@@ -49,18 +49,27 @@ async function deliver(message) {
     try {
       const personalization = { to: [{ email: message.to }] };
       if (message.cc) personalization.cc = [{ email: message.cc }];
+      const payload = {
+        personalizations: [personalization],
+        from: { email: FROM },
+        subject: message.subject,
+        content: [{ type: 'text/plain', value: message.text }],
+      };
+      if (message.attachments?.length) {
+        payload.attachments = message.attachments.map((a) => ({
+          content: Buffer.from(a.content, 'utf-8').toString('base64'),
+          type: a.contentType || 'text/csv',
+          filename: a.filename,
+          disposition: 'attachment',
+        }));
+      }
       const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${SENDGRID_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          personalizations: [personalization],
-          from: { email: FROM },
-          subject: message.subject,
-          content: [{ type: 'text/plain', value: message.text }],
-        }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         console.log(`[email] sent via SendGrid API to ${message.to}: ${message.subject}`);
@@ -97,22 +106,36 @@ function appendOutbox(message) {
   fs.writeFileSync(OUTBOX_PATH, JSON.stringify(outbox, null, 2));
 }
 
+// Build a CSV string (UTF-8 with BOM so it opens cleanly in Excel/Numbers).
+function toCsv(headers, rows) {
+  const esc = (v) => {
+    const s = v === null || v === undefined ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return '﻿' + [headers, ...rows].map((r) => r.map(esc).join(',')).join('\n');
+}
+
 function renderBody({ client, request }) {
   return [
-    `A license request requires your attention.`,
+    `LICENSE REQUEST`,
+    `============================================`,
     ``,
-    `Client Name:            ${client.name}`,
-    `Request For:            ${request.category === 'ic' ? 'IC Training' : 'Employee Training'}`,
-    `Request Date:           ${request.requestDate}`,
-    `Requested Count:        ${request.requestedCount}`,
-    `Current License Count:  ${request.currentCount}`,
-    `Request Type:           ${request.type}`,
-    `Request Status:         ${request.status}`,
+    `A new license request requires your attention.`,
     ``,
-    `Request Details:`,
-    `${request.details}`,
+    `  Client              ${client.name}`,
+    `  Request For         ${request.category === 'ic' ? 'IC Training' : 'Employee Training'}`,
+    `  Request Type        ${TYPE_LABEL[request.type] || request.type}`,
+    `  Requested Count     +${request.requestedCount}`,
+    `  Current Licenses    ${request.currentCount}`,
+    `  Request Date        ${request.requestDate}`,
+    `  Status              ${request.status}`,
     ``,
-    `— License Tracking System`,
+    `  Details`,
+    `  ${request.details || '—'}`,
+    ``,
+    `A CSV copy of this request is attached.`,
+    `--------------------------------------------`,
+    `License Tracking System · Safe Spaces`,
   ].join('\n');
 }
 
@@ -129,11 +152,17 @@ export async function sendRequestNotification({ client, request }) {
   const subject = `[License Request] ${catLabel} — ${TYPE_LABEL[request.type] || 'request'} — ${client.name}`;
   const text = renderBody({ client, request });
 
+  const csv = toCsv(
+    ['Client', 'Request For', 'Request Type', 'Requested Count', 'Current Licenses', 'Request Date', 'Status', 'Details'],
+    [[client.name, request.category === 'ic' ? 'IC Training' : 'Employee Training', TYPE_LABEL[request.type] || request.type,
+      request.requestedCount, request.currentCount, request.requestDate, request.status, request.details || '']],
+  );
   const message = {
     to: recipient,
     from: FROM,
     subject,
     text,
+    attachments: [{ filename: `license-request-${client.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`, content: csv, contentType: 'text/csv' }],
     sentAt: new Date().toISOString(),
     meta: {
       clientName: client.name,
@@ -209,21 +238,33 @@ export async function sendDecisionNotification({ client, request, decision }) {
 export async function sendUserOnboardingNotification({ client, onboarding }) {
   const subject = `[Onboarding] New user onboarded — ${client.name}`;
   const text = [
-    `A client has onboarded a new user.`,
+    `USER ONBOARDING — INFORMATION FOR TECH TEAM`,
+    `============================================`,
     ``,
-    `Client:        ${client.name}`,
-    `Username:      ${onboarding.username || '—'}`,
-    `First Name:    ${onboarding.firstName || '—'}`,
-    `Last Name:     ${onboarding.lastName || '—'}`,
-    `Email:         ${onboarding.email || '—'}`,
-    `Institution:   ${onboarding.institution || '—'}`,
-    `Joining Date:  ${onboarding.joiningDate || '—'}`,
+    `${client.name} has onboarded a new user. Please set up access.`,
     ``,
-    `— License Tracking System`,
+    `  Client         ${client.name}`,
+    `  Type           ${onboarding.userType || 'Employee'}`,
+    `  Username       ${onboarding.username || '—'}`,
+    `  First Name     ${onboarding.firstName || '—'}`,
+    `  Last Name      ${onboarding.lastName || '—'}`,
+    `  Email          ${onboarding.email || '—'}`,
+    `  Institution    ${onboarding.institution || '—'}`,
+    `  Joining Date   ${onboarding.joiningDate || '—'}`,
+    ``,
+    `A CSV copy of the user details is attached.`,
+    `--------------------------------------------`,
+    `License Tracking System · Safe Spaces`,
   ].join('\n');
 
+  const csv = toCsv(
+    ['Client', 'Type', 'Username', 'First Name', 'Last Name', 'Email', 'Institution', 'Joining Date'],
+    [[client.name, onboarding.userType || 'Employee', onboarding.username || '', onboarding.firstName || '',
+      onboarding.lastName || '', onboarding.email || '', onboarding.institution || '', onboarding.joiningDate || '']],
+  );
   const message = {
     to: ONBOARDING_TO, from: FROM, subject, text,
+    attachments: [{ filename: `onboarding-${client.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`, content: csv, contentType: 'text/csv' }],
     sentAt: new Date().toISOString(),
     meta: { kind: 'user-onboarding', clientName: client.name, username: onboarding.username },
   };
@@ -236,21 +277,30 @@ export async function sendUserOnboardingNotification({ client, onboarding }) {
 export async function sendBulkOnboardingNotification({ client, onboardings }) {
   const subject = `[Onboarding] ${onboardings.length} new user${onboardings.length > 1 ? 's' : ''} onboarded — ${client.name}`;
   const lines = onboardings.map((o, i) => [
-    `${i + 1}. ${[o.firstName, o.lastName].filter(Boolean).join(' ') || o.username || '—'}`,
-    `   Username: ${o.username || '—'}   Email: ${o.email || '—'}   Institution: ${o.institution || '—'}   Joining: ${o.joiningDate || '—'}`,
+    `  ${i + 1}. ${[o.firstName, o.lastName].filter(Boolean).join(' ') || o.username || '—'}  (${o.userType || 'Employee'})`,
+    `     Username: ${o.username || '—'}   Email: ${o.email || '—'}   Institution: ${o.institution || '—'}   Joining: ${o.joiningDate || '—'}`,
   ].join('\n'));
   const text = [
-    `A client has onboarded ${onboardings.length} new user(s).`,
+    `USER ONBOARDING — INFORMATION FOR TECH TEAM`,
+    `============================================`,
     ``,
-    `Client: ${client.name}`,
+    `${client.name} has onboarded ${onboardings.length} new user(s). Please set up access.`,
     ``,
     ...lines,
     ``,
-    `— License Tracking System`,
+    `A CSV of all users is attached.`,
+    `--------------------------------------------`,
+    `License Tracking System · Safe Spaces`,
   ].join('\n');
 
+  const csv = toCsv(
+    ['Client', 'Type', 'Username', 'First Name', 'Last Name', 'Email', 'Institution', 'Joining Date'],
+    onboardings.map((o) => [client.name, o.userType || 'Employee', o.username || '', o.firstName || '',
+      o.lastName || '', o.email || '', o.institution || '', o.joiningDate || '']),
+  );
   const message = {
     to: ONBOARDING_TO, from: FROM, subject, text,
+    attachments: [{ filename: `onboarding-${client.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`, content: csv, contentType: 'text/csv' }],
     sentAt: new Date().toISOString(),
     meta: { kind: 'user-onboarding-bulk', clientName: client.name, count: onboardings.length },
   };

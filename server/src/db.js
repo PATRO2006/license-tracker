@@ -71,6 +71,10 @@ async function migrate() {
     USE_PG
       ? `ALTER TABLE training_report ADD COLUMN IF NOT EXISTS clientId TEXT`
       : `ALTER TABLE training_report ADD COLUMN clientId TEXT`,
+    // userType distinguishes onboarded users (e.g. Employee vs Coach for Fittr).
+    USE_PG
+      ? `ALTER TABLE onboardings ADD COLUMN IF NOT EXISTS userType TEXT DEFAULT 'Employee'`
+      : `ALTER TABLE onboardings ADD COLUMN userType TEXT DEFAULT 'Employee'`,
   ];
   for (const a of alters) {
     try {
@@ -152,7 +156,7 @@ async function createSchema(kind) {
     )`,
     `CREATE TABLE IF NOT EXISTS onboardings (
       id TEXT PRIMARY KEY, clientId TEXT NOT NULL, username TEXT, firstName TEXT,
-      lastName TEXT, email TEXT, institution TEXT, joiningDate TEXT, createdAt TEXT
+      lastName TEXT, email TEXT, institution TEXT, joiningDate TEXT, userType TEXT DEFAULT 'Employee', createdAt TEXT
     )`,
     `CREATE TABLE IF NOT EXISTS training_report (
       id ${auto}, clientId TEXT, name TEXT, email TEXT, status TEXT, date TEXT
@@ -224,8 +228,8 @@ export const insertUser = (u) => run(
   [u.id, u.name, u.username, u.email, u.passwordHash, u.role, u.clientId, u.initials]
 );
 export const insertOnboarding = (o) => run(
-  'INSERT INTO onboardings (id,clientId,username,firstName,lastName,email,institution,joiningDate,createdAt) VALUES (?,?,?,?,?,?,?,?,?)',
-  [o.id, o.clientId, o.username, o.firstName, o.lastName, o.email, o.institution, o.joiningDate, o.createdAt]
+  'INSERT INTO onboardings (id,clientId,username,firstName,lastName,email,institution,joiningDate,userType,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+  [o.id, o.clientId, o.username, o.firstName, o.lastName, o.email, o.institution, o.joiningDate, o.userType || 'Employee', o.createdAt]
 );
 export const updateRequestStatus = (id, status, completionDate) =>
   run('UPDATE requests SET status = ?, completionDate = ? WHERE id = ?', [status, completionDate, id]);

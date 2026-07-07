@@ -2,8 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { downloadPoshReport } from '../report.js';
 
-// Parse an uploaded training CSV. Positional: name, email, status, date
-// (matches the standard export format, whose first column has no header).
+// Parse an uploaded training CSV. Maps columns by HEADER name (case/spacing
+// insensitive) so any column order works; falls back to positional
+// (name, email, status, date) if the headers aren't recognised. This fixes
+// reports where only the name printed because the columns were in a different
+// order than expected.
 function parseTrainingCsv(text) {
   const splitLine = (l) => {
     const out = []; let cur = ''; let q = false;
@@ -17,9 +20,20 @@ function parseTrainingCsv(text) {
     out.push(cur); return out;
   };
   const lines = text.replace(/\r/g, '').split('\n').filter((l) => l.trim());
-  return lines.slice(1).map((l) => {
+  if (lines.length === 0) return [];
+  const norm = (s) => s.trim().toLowerCase().replace(/[^a-z]/g, '');
+  const header = splitLine(lines[0]).map(norm);
+  const idx = (names) => header.findIndex((h) => names.includes(h));
+  let iN = idx(['name', 'fullname', 'employeename', 'username']);
+  let iE = idx(['email', 'emailaddress', 'emailid']);
+  let iS = idx(['status', 'trainingstatus', 'completion', 'completionstatus']);
+  let iD = idx(['date', 'completedon', 'completiondate', 'timestamp', 'completedat']);
+  const headerRecognised = iN >= 0 || iE >= 0 || iS >= 0;
+  if (!headerRecognised) { iN = 0; iE = 1; iS = 2; iD = 3; }
+  const val = (c, i) => (i >= 0 && c[i] !== undefined ? c[i].trim() : '');
+  return lines.slice(headerRecognised ? 1 : 0).map((l) => {
     const c = splitLine(l);
-    return { name: (c[0] || '').trim(), email: (c[1] || '').trim(), status: (c[2] || '').trim(), date: (c[3] || '').trim() };
+    return { name: val(c, iN), email: val(c, iE), status: val(c, iS), date: val(c, iD) };
   }).filter((r) => r.name || r.email);
 }
 

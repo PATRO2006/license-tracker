@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import {
   initDb, USE_PG, getClients, getClient, getRequests, getHistory, getTraining,
   getUserByLogin, getUserById, getRequestById,
-  insertClient, insertUser, insertRequest, insertHistory,
+  insertClient, insertUser, insertRequest, insertHistory, insertTraining,
   updateRequestStatus, bumpClientTotal, updateUserPassword, updateClientFields,
   bumpTrainingOrdered, updateRequestFields,
   insertOnboarding, getOnboardingsForClient,
@@ -119,6 +119,10 @@ app.get('/api/clients/:id', authRequired, async (req, res) => {
 app.post('/api/clients', authRequired, adminOnly, async (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
+  // Both Employee Training and IC Training must be provided when adding a client.
+  if (b.totalPurchased === undefined || b.totalPurchased === '' || b.icOrdered === undefined || b.icOrdered === '') {
+    return res.status(400).json({ error: 'Employee Training and IC Training counts are both required' });
+  }
   const id = slugify(b.name);
   if (await getClient(id)) return res.status(409).json({ error: 'A client with that name already exists' });
 
@@ -135,6 +139,11 @@ app.post('/api/clients', authRequired, adminOnly, async (req, res) => {
   await insertHistory({
     id: newId('h'), clientId: id, date: today(), action: 'allocation',
     detail: `Initial allocation of ${total} licenses`, changedBy: req.user.name, licenseDelta: total,
+  });
+  // IC Training row (created alongside the client).
+  await insertTraining({
+    clientId: id, ordered: Number(b.icOrdered || 0), used: Number(b.icUsed || 0),
+    trainingCompleted: Number(b.icCompleted || 0), date: b.sharedOn || today(),
   });
 
   const initials = b.name.replace(/[^A-Za-z ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
@@ -266,7 +275,8 @@ app.post('/api/onboard', authRequired, async (req, res) => {
   const onboarding = {
     id: newId('ob'), clientId,
     username: b.username || null, firstName: b.firstName || null, lastName: b.lastName || null,
-    email: b.email || null, institution: b.institution || null, joiningDate: b.joiningDate || null, createdAt: today(),
+    email: b.email || null, institution: b.institution || null, joiningDate: b.joiningDate || null,
+    userType: b.userType === 'Coach' ? 'Coach' : 'Employee', createdAt: today(),
   };
   await insertOnboarding(onboarding);
 
@@ -277,18 +287,21 @@ app.post('/api/onboard', authRequired, async (req, res) => {
 // Onboard MULTIPLE users at once. Body: { users: [{username,firstName,lastName,email,joiningDate}, ...] }
 app.post('/api/onboard-bulk', authRequired, async (req, res) => {
   const b = req.body || {};
-  const clientId = req.user.role === 'admin' ? b.clientId : req.user.clientId;
-  const client = await getClient(clientId);
-  if (!client) return res.status(400).json({ error: 'Unknown client' });
   const list = Array.isArray(b.users) ? b.users.filter((u) => u && (u.username || u.email)) : [];
   if (list.length === 0) return res.status(400).json({ error: 'No valid users provided (need username or email)' });
+  // Resolve the target client: clients onboard for themselves; admins target a
+  // client via top-level clientId or per-user clientId.
+  const clientId = req.user.role === 'admin' ? (b.clientId || list[0].clientId) : req.user.clientId;
+  const client = await getClient(clientId);
+  if (!client) return res.status(400).json({ error: 'Unknown client' });
 
   const created = [];
   for (const u of list) {
     const onboarding = {
       id: newId('ob'), clientId,
       username: u.username || null, firstName: u.firstName || null, lastName: u.lastName || null,
-      email: u.email || null, institution: u.institution || null, joiningDate: u.joiningDate || null, createdAt: today(),
+      email: u.email || null, institution: u.institution || null, joiningDate: u.joiningDate || null,
+      userType: u.userType === 'Coach' ? 'Coach' : 'Employee', createdAt: today(),
     };
     await insertOnboarding(onboarding);
     created.push(onboarding);
@@ -322,7 +335,11 @@ app.post('/api/clients/:id/report', authRequired, adminOnly, async (req, res) =>
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
   if (!rows || rows.length === 0) return res.status(400).json({ error: 'No rows provided' });
   await replaceReportRowsForClient(req.params.id, rows.map((r) => ({ name: r.name || '', email: r.email || '', status: r.status || '', date: r.date || '' })));
-  res.json(buildReportStats(await getReportRowsForClient(req.params.id)));
+  const stats = buildReportStats(await getReportRowsForClient(req.params.id));
+  // Keep the client's "Training Completed" figure in sync with the uploaded
+  // report (number of users marked Completed).
+  await updateClientFields(req.params.id, { trainingCompleted: stats.completed });
+  res.json(stats);
 });
 
 // ---------- Misc ----------

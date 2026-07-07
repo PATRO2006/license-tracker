@@ -5,7 +5,7 @@ import { api } from '../api.js';
 export default function AddClientModal({ onClose, onCreated, notify }) {
   const [form, setForm] = useState({
     name: '', contact: '', contactEmail: '', totalPurchased: 0, activeLicenses: 0, pendingLicenses: 0,
-    contractEnd: '', password: '',
+    icOrdered: 0, icUsed: 0, icCompleted: 0, contractEnd: '', password: '',
   });
   const [busy, setBusy] = useState(false);
   const [creds, setCreds] = useState(null);
@@ -20,6 +20,7 @@ export default function AddClientModal({ onClose, onCreated, notify }) {
         name: form.name, contact: form.contact, contactEmail: form.contactEmail,
         totalPurchased: Number(form.totalPurchased), activeLicenses: Number(form.activeLicenses),
         pendingLicenses: Number(form.pendingLicenses),
+        icOrdered: Number(form.icOrdered), icUsed: Number(form.icUsed), icCompleted: Number(form.icCompleted),
         contractEnd: form.contractEnd || undefined,
         password: form.password || undefined,
       });
@@ -58,10 +59,17 @@ export default function AddClientModal({ onClose, onCreated, notify }) {
         <div className="field"><label>Company name</label><input value={form.name} onChange={set('name')} required placeholder="e.g. Acme Corp" /></div>
         <div className="field"><label>Contact person</label><input value={form.contact} onChange={set('contact')} placeholder="Optional" /></div>
         <div className="field"><label>Contact email</label><input type="email" value={form.contactEmail} onChange={set('contactEmail')} placeholder="Optional" /></div>
+        <div className="section-title" style={{ marginTop: 16, marginBottom: 0 }}>Employee Training</div>
         <div className="row" style={{ gap: 12 }}>
-          <div className="field" style={{ flex: 1 }}><label>Ordered</label><input type="number" min="0" value={form.totalPurchased} onChange={set('totalPurchased')} /></div>
+          <div className="field" style={{ flex: 1 }}><label>Ordered</label><input type="number" min="0" value={form.totalPurchased} onChange={set('totalPurchased')} required /></div>
           <div className="field" style={{ flex: 1 }}><label>Used</label><input type="number" min="0" value={form.activeLicenses} onChange={set('activeLicenses')} /></div>
           <div className="field" style={{ flex: 1 }}><label>Pending</label><input type="number" value={form.pendingLicenses} onChange={set('pendingLicenses')} /></div>
+        </div>
+        <div className="section-title" style={{ marginTop: 12, marginBottom: 0 }}>IC Training</div>
+        <div className="row" style={{ gap: 12 }}>
+          <div className="field" style={{ flex: 1 }}><label>Ordered</label><input type="number" min="0" value={form.icOrdered} onChange={set('icOrdered')} required /></div>
+          <div className="field" style={{ flex: 1 }}><label>Used</label><input type="number" min="0" value={form.icUsed} onChange={set('icUsed')} /></div>
+          <div className="field" style={{ flex: 1 }}><label>Completed</label><input type="number" min="0" value={form.icCompleted} onChange={set('icCompleted')} /></div>
         </div>
         <div className="row" style={{ gap: 12 }}>
           <div className="field" style={{ flex: 1 }}><label>Contract end (optional)</label><input type="date" value={form.contractEnd} onChange={set('contractEnd')} /></div>

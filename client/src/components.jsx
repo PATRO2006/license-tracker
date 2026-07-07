@@ -36,6 +36,35 @@ export function StatusChip({ status }) {
   return <span className={`chip ${slug(status)}`}>{status}</span>;
 }
 
+// A button that opens a small menu of download options (e.g. Fittr:
+// Employees / Coaches). Self-contained with its own open/close state.
+export function SplitDownload({ label = 'Download report', options }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }} onMouseLeave={() => setOpen(false)}>
+      <button type="button" className="btn" onClick={() => setOpen((o) => !o)}>{label} ▾</button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 30, minWidth: 210,
+          background: 'var(--surface, #1b1f2a)', border: '1px solid var(--border, rgba(255,255,255,.12))',
+          borderRadius: 10, padding: 6, boxShadow: '0 10px 30px rgba(0,0,0,.4)',
+        }}>
+          {options.map((o) => (
+            <button key={o.label} type="button" className="dropdown-item"
+              onClick={() => { o.onClick(); setOpen(false); }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent',
+                border: 'none', color: 'inherit', padding: '9px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,.07)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CapacityGauge({ percent, ordered, used }) {
   const pct = Math.max(0, Math.min(percent, 130));
   const radius = 90;

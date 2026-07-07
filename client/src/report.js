@@ -62,9 +62,13 @@ export function downloadPoshReport(rows, clientName) {
     rows.map((r) => [r.name, r.email, r.status, r.date]));
 }
 
-// Onboarded users under a specific client.
-export function downloadUsersReport(clientName, onboardings) {
+// Onboarded users under a specific client. Optionally filter by userType
+// (used for Fittr: separate Employees vs Coaches downloads).
+export function downloadUsersReport(clientName, onboardings, userType) {
   const safe = (clientName || 'client').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
-  downloadCsv(`${safe}-users.csv`, ['First Name', 'Last Name', 'Username', 'Email', 'Institution', 'Joining Date', 'Added On'],
-    (onboardings || []).map((o) => [o.firstName || '', o.lastName || '', o.username || '', o.email || '', o.institution || '', o.joiningDate || '', o.createdAt || '']));
+  const list = (onboardings || []).filter((o) => !userType || (o.userType || 'Employee') === userType);
+  const suffix = userType ? `-${userType.toLowerCase()}s` : '';
+  downloadCsv(`${safe}-users${suffix}.csv`,
+    ['First Name', 'Last Name', 'Username', 'Email', 'Institution', 'Joining Date', 'Type', 'Added On'],
+    list.map((o) => [o.firstName || '', o.lastName || '', o.username || '', o.email || '', o.institution || '', o.joiningDate || '', o.userType || 'Employee', o.createdAt || '']));
 }

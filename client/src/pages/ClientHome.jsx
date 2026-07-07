@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { StatusChip, TrainingPanel, Icon } from '../components.jsx';
+import { StatusChip, TrainingPanel, Icon, SplitDownload } from '../components.jsx';
 import RequestModal from './RequestModal.jsx';
 import OnboardUserModal from './OnboardUserModal.jsx';
 import { downloadClientReport, downloadUsersReport, downloadPoshReport } from '../report.js';
@@ -44,7 +44,14 @@ export default function ClientHome({ notify, onChange }) {
           <div className="sub">Your license overview {c.contact ? `· Contact: ${c.contact}` : ''}</div>
         </div>
         <div className="row" style={{ gap: 10 }}>
-          <button className="btn" onClick={() => downloadClientReport(c)}>Download report</button>
+          {c.id === 'fittr' ? (
+            <SplitDownload label="Download report" options={[
+              { label: 'Download for Employees', onClick: () => downloadUsersReport(c.name, c.onboardings, 'Employee') },
+              { label: 'Download for Coaches', onClick: () => downloadUsersReport(c.name, c.onboardings, 'Coach') },
+            ]} />
+          ) : (
+            <button className="btn" onClick={() => downloadClientReport(c)}>Download report</button>
+          )}
           <button className="btn" onClick={() => setShowOnboard(true)}>Onboard user</button>
           <button className="btn btn-primary" onClick={() => setShowRequest(true)}>Raise request</button>
         </div>
@@ -119,13 +126,13 @@ export default function ClientHome({ notify, onChange }) {
 
             <div className="card detail-section">
               <div className="spread" style={{ marginBottom: 14 }}>
-                <h3 style={{ margin: 0 }}>Onboarded Users</h3>
+                <h3 style={{ margin: 0 }}>Information Sent to Tech Team</h3>
                 {c.onboardings && c.onboardings.length > 0 && (
                   <button className="btn btn-sm" onClick={() => downloadUsersReport(c.name, c.onboardings)}>Download users CSV</button>
                 )}
               </div>
               {(!c.onboardings || c.onboardings.length === 0) ? (
-                <div className="muted">No users onboarded yet. Use “Onboard user” to add one.</div>
+                <div className="muted">No information sent yet. Use “Onboard user” to send user details to the tech team.</div>
               ) : (
                 <table className="tbl">
                   <thead><tr><th>Name</th><th>Username</th><th>Joined</th></tr></thead>
@@ -156,6 +163,7 @@ export default function ClientHome({ notify, onChange }) {
       )}
       {showOnboard && (
         <OnboardUserModal
+          clientId={c.id}
           onClose={() => setShowOnboard(false)}
           onDone={() => { reload(); onChange?.(); }}
           notify={notify}
