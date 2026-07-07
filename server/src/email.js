@@ -18,8 +18,17 @@ const NOTIFY_TO = process.env.NOTIFY_EMAIL || 'support@safespacesinc.in';
 const ONBOARDING_TO = process.env.ONBOARDING_EMAIL || 'tech.support@safespacesinc.in';
 const FROM = process.env.SMTP_FROM || 'license-tracker@example.com';
 
+// Preferred transport: SendGrid's HTTPS API (port 443), because many hosts
+// (Render included) block outbound SMTP ports 465/587 — which caused
+// "[email] Connection timeout" and nothing reaching SendGrid. The API key is
+// read from SENDGRID_API_KEY, or reused from SMTP_PASS when SMTP_USER=apikey.
+const SENDGRID_API_KEY =
+  process.env.SENDGRID_API_KEY ||
+  (process.env.SMTP_USER === 'apikey' ? process.env.SMTP_PASS : null);
+
+// SMTP is kept only as a fallback if no API key is available.
 let transporter = null;
-if (process.env.SMTP_HOST) {
+if (!SENDGRID_API_KEY && process.env.SMTP_HOST) {
   transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
@@ -27,13 +36,51 @@ if (process.env.SMTP_HOST) {
     auth: process.env.SMTP_USER
       ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
       : undefined,
-    // Fail fast instead of hanging if the SMTP port is blocked/unreachable
-    // (some hosts block 465/587). These caps ensure sendMail rejects quickly
-    // and we log a real error rather than leaving a request wedged.
     connectionTimeout: 10000,
     greetingTimeout: 10000,
     socketTimeout: 15000,
   });
+}
+
+// Single delivery path: SendGrid API → SMTP → outbox file. Returns true if the
+// message was accepted for delivery (API/SMTP), false if only queued locally.
+async function deliver(message) {
+  if (SENDGRID_API_KEY) {
+    try {
+      const personalization = { to: [{ email: message.to }] };
+      if (message.cc) personalization.cc = [{ email: message.cc }];
+      const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${SENDGRID_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          personalizations: [personalization],
+          from: { email: FROM },
+          subject: message.subject,
+          content: [{ type: 'text/plain', value: message.text }],
+        }),
+      });
+      if (res.ok) {
+        console.log(`[email] sent via SendGrid API to ${message.to}: ${message.subject}`);
+        return true;
+      }
+      const body = await res.text();
+      console.error(`[email] SendGrid API error ${res.status}: ${body}`);
+    } catch (e) {
+      console.error('[email] SendGrid API request failed:', e.message);
+    }
+    // fall through to SMTP/outbox on failure
+  }
+  if (transporter) {
+    await transporter.sendMail(message);
+    console.log(`[email] sent via SMTP to ${message.to}: ${message.subject}`);
+    return true;
+  }
+  appendOutbox(message);
+  console.log(`[email:outbox] queued to ${message.to}: ${message.subject}`);
+  return false;
 }
 
 function appendOutbox(message) {
@@ -98,13 +145,7 @@ export async function sendRequestNotification({ client, request }) {
     },
   };
 
-  if (transporter) {
-    await transporter.sendMail(message);
-    console.log(`[email] sent to ${recipient}: ${subject}`);
-  } else {
-    appendOutbox(message);
-    console.log(`[email:outbox] queued to ${recipient}: ${subject}`);
-  }
+  await deliver(message);
   return message;
 }
 
@@ -129,13 +170,7 @@ export async function sendOnboardingNotification({ client }) {
     meta: { kind: 'onboarding', clientName: client.name },
   };
 
-  if (transporter) {
-    await transporter.sendMail(message);
-    console.log(`[email] onboarding sent to ${ONBOARDING_TO}: ${subject}`);
-  } else {
-    appendOutbox(message);
-    console.log(`[email:outbox] onboarding queued to ${ONBOARDING_TO}: ${subject}`);
-  }
+  await deliver(message);
   return message;
 }
 
@@ -166,13 +201,7 @@ export async function sendDecisionNotification({ client, request, decision }) {
     meta: { kind: 'decision', clientName: client.name, decision, requestId: request.id },
   };
 
-  if (transporter) {
-    await transporter.sendMail(message);
-    console.log(`[email] decision sent to ${to}: ${subject}`);
-  } else {
-    appendOutbox(message);
-    console.log(`[email:outbox] decision queued to ${to}: ${subject}`);
-  }
+  await deliver(message);
   return message;
 }
 
@@ -199,13 +228,7 @@ export async function sendUserOnboardingNotification({ client, onboarding }) {
     meta: { kind: 'user-onboarding', clientName: client.name, username: onboarding.username },
   };
 
-  if (transporter) {
-    await transporter.sendMail(message);
-    console.log(`[email] user onboarding sent to ${ONBOARDING_TO}: ${subject}`);
-  } else {
-    appendOutbox(message);
-    console.log(`[email:outbox] user onboarding queued to ${ONBOARDING_TO}: ${subject}`);
-  }
+  await deliver(message);
   return message;
 }
 
@@ -232,13 +255,7 @@ export async function sendBulkOnboardingNotification({ client, onboardings }) {
     meta: { kind: 'user-onboarding-bulk', clientName: client.name, count: onboardings.length },
   };
 
-  if (transporter) {
-    await transporter.sendMail(message);
-    console.log(`[email] bulk onboarding sent to ${ONBOARDING_TO}: ${subject}`);
-  } else {
-    appendOutbox(message);
-    console.log(`[email:outbox] bulk onboarding queued to ${ONBOARDING_TO}: ${subject}`);
-  }
+  await deliver(message);
   return message;
 }
 
