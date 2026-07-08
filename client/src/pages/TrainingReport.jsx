@@ -44,6 +44,9 @@ export default function TrainingReport({ notify }) {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('All');
   const [busy, setBusy] = useState(false);
+  const [rType, setRType] = useState('employee'); // Fittr: employee | coach
+
+  const isFittr = clientId === 'fittr';
 
   useEffect(() => {
     api.clients().then((cs) => { setClients(cs); if (cs[0]) setClientId(cs[0].id); }).catch(() => {});
@@ -51,10 +54,11 @@ export default function TrainingReport({ notify }) {
   useEffect(() => {
     if (!clientId) return;
     setData(null);
-    api.clientReport(clientId).then(setData).catch(() => setData(null));
-  }, [clientId]);
+    api.clientReport(clientId, rType).then(setData).catch(() => setData(null));
+  }, [clientId, rType]);
 
   const clientName = clients.find((c) => c.id === clientId)?.name || '';
+  const typeLabel = isFittr ? (rType === 'coach' ? 'Coaches' : 'Employees') : '';
 
   function onUpload(e) {
     const file = e.target.files?.[0];
@@ -65,9 +69,9 @@ export default function TrainingReport({ notify }) {
       if (rows.length === 0) return notify?.('No valid rows found in the CSV.');
       setBusy(true);
       try {
-        const updated = await api.uploadClientReport(clientId, rows);
+        const updated = await api.uploadClientReport(clientId, rows, rType);
         setData(updated);
-        notify?.(`${clientName} report updated — ${updated.total} users loaded.`);
+        notify?.(`${clientName}${isFittr ? ` (${typeLabel})` : ''} report updated — ${updated.total} users loaded.`);
       } catch (e2) { notify?.(`Upload failed: ${e2.message}`); }
       setBusy(false);
     };
@@ -95,20 +99,32 @@ export default function TrainingReport({ notify }) {
             {busy ? 'Uploading…' : 'Upload CSV'}
             <input type="file" accept=".csv,text/csv" onChange={onUpload} style={{ display: 'none' }} disabled={busy || !clientId} />
           </label>
-          <button className="btn btn-primary" onClick={() => downloadPoshReport(data?.rows || [], clientName)} disabled={!data || !data.total}>Download CSV</button>
+          <button className="btn btn-primary" onClick={() => downloadPoshReport(data?.rows || [], isFittr ? `${clientName}-${typeLabel}` : clientName)} disabled={!data || !data.total}>Download CSV</button>
         </div>
       </div>
 
       <div className="content">
-        <div className="field" style={{ marginTop: 0, maxWidth: 320 }}>
-          <label>Client</label>
-          <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
-            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+        <div className="row" style={{ gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="field" style={{ marginTop: 0, maxWidth: 320, flex: 1 }}>
+            <label>Client</label>
+            <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          {isFittr && (
+            <div className="row" style={{ gap: 8 }}>
+              {['employee', 'coach'].map((t) => (
+                <button key={t} className={`btn btn-sm${rType === t ? ' btn-primary' : ''}`} onClick={() => setRType(t)}>
+                  {t === 'coach' ? 'Coaches' : 'Employees'}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+        {isFittr && <div className="muted" style={{ fontSize: 12, margin: '8px 0 0' }}>Fittr has separate reports — upload/view the {typeLabel} report using the toggle above.</div>}
 
         {!data ? <div className="empty">Loading…</div> : data.total === 0 ? (
-          <div className="card" style={{ marginTop: 18 }}><div className="empty">No training report uploaded for {clientName} yet. Use “Upload CSV” to add one.</div></div>
+          <div className="card" style={{ marginTop: 18 }}><div className="empty">No {isFittr ? `${typeLabel} ` : ''}training report uploaded for {clientName} yet. Use “Upload CSV” to add one.</div></div>
         ) : (
           <>
             <div className="grid grid-stats" style={{ marginTop: 18 }}>

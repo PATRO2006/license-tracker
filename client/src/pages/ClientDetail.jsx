@@ -26,6 +26,18 @@ export default function ClientDetail({ notify, onChange }) {
   const reload = () => api.client(id).then(setC).catch(() => {});
   useEffect(() => { reload(); }, [id]);
 
+  async function handleDelete() {
+    if (!window.confirm(`Delete client "${c.name}"?\n\nThis permanently removes the client, its login, licenses, onboarded users, uploaded reports and history. This cannot be undone.`)) return;
+    try {
+      await api.deleteClient(c.id);
+      notify?.(`Client "${c.name}" deleted.`);
+      onChange?.();
+      navigate('/clients');
+    } catch (err) {
+      notify?.(`Delete failed: ${err.message}`);
+    }
+  }
+
   if (!c) return <div className="content"><div className="empty">Loading…</div></div>;
 
   const available = c.available;
@@ -53,6 +65,7 @@ export default function ClientDetail({ notify, onChange }) {
             <button className="btn" onClick={() => downloadClientReport(c)}>Download report</button>
           )}
           <button className="btn" onClick={() => setShowEdit(true)}>Edit</button>
+          <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
           <button className="btn btn-primary" onClick={() => setShowModal(true)}>Raise request</button>
         </div>
       </div>

@@ -75,6 +75,10 @@ async function migrate() {
     USE_PG
       ? `ALTER TABLE onboardings ADD COLUMN IF NOT EXISTS userType TEXT DEFAULT 'Employee'`
       : `ALTER TABLE onboardings ADD COLUMN userType TEXT DEFAULT 'Employee'`,
+    // reportType lets a client hold separate training reports (Fittr: employee/coach).
+    USE_PG
+      ? `ALTER TABLE training_report ADD COLUMN IF NOT EXISTS reportType TEXT DEFAULT 'employee'`
+      : `ALTER TABLE training_report ADD COLUMN reportType TEXT DEFAULT 'employee'`,
   ];
   for (const a of alters) {
     try {
@@ -175,14 +179,19 @@ export const getUserByLogin = (id) =>
   get('SELECT * FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)', [id, id]);
 export const getUserById = (id) => get('SELECT * FROM users WHERE id = ?', [id]);
 export const getRequestById = (id) => get('SELECT * FROM requests WHERE id = ?', [id]);
-export const getReportRowsForClient = (clientId) =>
-  all('SELECT name, email, status, date FROM training_report WHERE clientId = ? ORDER BY id', [clientId]);
-export const replaceReportRowsForClient = async (clientId, rows) => {
-  await run('DELETE FROM training_report WHERE clientId = ?', [clientId]);
+export const getReportRowsForClient = (clientId, reportType = 'employee') =>
+  all('SELECT name, email, status, date FROM training_report WHERE clientId = ? AND reportType = ? ORDER BY id', [clientId, reportType]);
+export const replaceReportRowsForClient = async (clientId, rows, reportType = 'employee') => {
+  await run('DELETE FROM training_report WHERE clientId = ? AND reportType = ?', [clientId, reportType]);
   for (const r of rows) {
-    await run('INSERT INTO training_report (clientId,name,email,status,date) VALUES (?,?,?,?,?)',
-      [clientId, r.name || '', r.email || '', r.status || '', r.date || '']);
+    await run('INSERT INTO training_report (clientId,reportType,name,email,status,date) VALUES (?,?,?,?,?,?)',
+      [clientId, reportType, r.name || '', r.email || '', r.status || '', r.date || '']);
   }
+};
+// Total "Completed" across all report types for a client (drives trainingCompleted).
+export const getReportCompletedTotal = async (clientId) => {
+  const rows = await all('SELECT status FROM training_report WHERE clientId = ?', [clientId]);
+  return rows.filter((r) => (r.status || '').trim().toLowerCase() === 'completed').length;
 };
 export const getOnboardings = () => all('SELECT * FROM onboardings');
 export const getOnboardingsForClient = (clientId) =>
@@ -245,3 +254,15 @@ export const updateClientFields = (id, fields) => {
 };
 export const setClientContactEmail = (id, email) =>
   run('UPDATE clients SET contactEmail = ? WHERE id = ?', [email, id]);
+
+// Delete a client and everything tied to it (login, training, requests,
+// onboardings, uploaded report rows, history).
+export async function deleteClientCascade(id) {
+  await run('DELETE FROM training WHERE clientId = ?', [id]);
+  await run('DELETE FROM requests WHERE clientId = ?', [id]);
+  await run('DELETE FROM onboardings WHERE clientId = ?', [id]);
+  await run('DELETE FROM training_report WHERE clientId = ?', [id]);
+  await run('DELETE FROM history WHERE clientId = ?', [id]);
+  await run('DELETE FROM users WHERE clientId = ?', [id]);
+  await run('DELETE FROM clients WHERE id = ?', [id]);
+}

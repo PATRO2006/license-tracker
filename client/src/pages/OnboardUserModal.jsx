@@ -28,7 +28,7 @@ function parseCsv(text) {
   const iE = idx(['email', 'emailaddress', 'emailid']);
   const iI = idx(['institution', 'institute', 'org', 'organisation', 'organization']);
   const iJ = idx(['joiningdate', 'joining', 'joindate', 'dateofjoining']);
-  const iT = idx(['type', 'usertype', 'role', 'category']);
+  const iT = idx(['type', 'usertype', 'role', 'category', 'designation', 'position', 'usercategory']);
   const val = (cols, i) => (i >= 0 && cols[i] !== undefined ? cols[i].trim() : '');
   return lines.slice(1).map((l) => {
     const c = splitLine(l);
@@ -41,6 +41,8 @@ export default function OnboardUserModal({ clientId, onClose, onDone, notify }) 
   const [rows, setRows] = useState([blank()]);
   const [busy, setBusy] = useState(false);
   const isFittr = clientId === 'fittr'; // Fittr splits users into Employees / Coaches
+  // How to assign type to CSV-uploaded users: auto = read from CSV, else force all.
+  const [csvType, setCsvType] = useState('auto');
 
   const setField = (i, k) => (e) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: e.target.value } : r)));
   const addRow = () => setRows((rs) => [...rs, blank()]);
@@ -51,10 +53,14 @@ export default function OnboardUserModal({ clientId, onClose, onDone, notify }) 
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const parsed = parseCsv(String(reader.result || ''));
+      let parsed = parseCsv(String(reader.result || ''));
       if (parsed.length === 0) return notify?.('No valid rows found in the CSV.');
+      // For Fittr, apply the chosen assignment: auto keeps CSV-detected types,
+      // otherwise force all uploaded rows to Employee or Coach.
+      if (isFittr && csvType !== 'auto') parsed = parsed.map((r) => ({ ...r, userType: csvType }));
       setRows(parsed);
-      notify?.(`Loaded ${parsed.length} user${parsed.length > 1 ? 's' : ''} from CSV — review and submit.`);
+      const coaches = parsed.filter((r) => r.userType === 'Coach').length;
+      notify?.(`Loaded ${parsed.length} user${parsed.length > 1 ? 's' : ''} from CSV${isFittr ? ` (${coaches} coach${coaches === 1 ? '' : 'es'}, ${parsed.length - coaches} employee${parsed.length - coaches === 1 ? '' : 's'})` : ''} — review and submit.`);
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -87,11 +93,20 @@ export default function OnboardUserModal({ clientId, onClose, onDone, notify }) 
         <div className="req-row" style={{ marginTop: 14, background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
           <div style={{ fontSize: 13 }}>
             <b>Upload CSV</b>
-            <div className="muted" style={{ fontSize: 12 }}>Columns: username, first name, last name, email, institution, joining date</div>
+            <div className="muted" style={{ fontSize: 12 }}>Columns: username, first name, last name, email, institution, joining date{isFittr ? ', type (Employee/Coach)' : ''}</div>
           </div>
-          <label className="btn btn-sm" style={{ cursor: 'pointer' }}>
-            Choose file<input type="file" accept=".csv,text/csv" onChange={onFile} style={{ display: 'none' }} />
-          </label>
+          <div className="row" style={{ gap: 8 }}>
+            {isFittr && (
+              <select value={csvType} onChange={(e) => setCsvType(e.target.value)} style={{ fontSize: 12, padding: '6px 8px' }} title="How to set the type for uploaded users">
+                <option value="auto">Type: auto-detect from CSV</option>
+                <option value="Employee">All as Employees</option>
+                <option value="Coach">All as Coaches</option>
+              </select>
+            )}
+            <label className="btn btn-sm" style={{ cursor: 'pointer' }}>
+              Choose file<input type="file" accept=".csv,text/csv" onChange={onFile} style={{ display: 'none' }} />
+            </label>
+          </div>
         </div>
 
         {rows.map((r, i) => (

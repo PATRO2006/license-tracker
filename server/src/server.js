@@ -7,11 +7,11 @@ import { fileURLToPath } from 'node:url';
 import {
   initDb, USE_PG, getClients, getClient, getRequests, getHistory, getTraining,
   getUserByLogin, getUserById, getRequestById,
-  insertClient, insertUser, insertRequest, insertHistory, insertTraining,
+  insertClient, insertUser, insertRequest, insertHistory, insertTraining, deleteClientCascade,
   updateRequestStatus, bumpClientTotal, updateUserPassword, updateClientFields,
   bumpTrainingOrdered, updateRequestFields,
   insertOnboarding, getOnboardingsForClient,
-  getReportRowsForClient, replaceReportRowsForClient,
+  getReportRowsForClient, replaceReportRowsForClient, getReportCompletedTotal,
 } from './db.js';
 import { enrichClient, buildDashboard } from './logic.js';
 import { buildReportStats } from './trainingReport.js';
@@ -176,6 +176,14 @@ app.patch('/api/clients/:id', authRequired, adminOnly, async (req, res) => {
   res.json(enrichClient(await getClient(req.params.id), await getRequests(), await getTraining()));
 });
 
+// Admin: delete a client and all associated data.
+app.delete('/api/clients/:id', authRequired, adminOnly, async (req, res) => {
+  const client = await getClient(req.params.id);
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  await deleteClientCascade(req.params.id);
+  res.json({ ok: true, deleted: req.params.id });
+});
+
 // ---------- Requests ----------
 app.get('/api/requests', authRequired, async (req, res) => {
   let rows = await getRequests();
@@ -323,9 +331,12 @@ app.get('/api/onboardings', authRequired, async (req, res) => {
 
 // ---------- Training report (per client) ----------
 // View a client's report — admin, or that client for their own.
+// ?type=employee|coach — a client can hold separate reports (Fittr).
+const reportType = (req) => (req.query.type === 'coach' ? 'coach' : 'employee');
+
 app.get('/api/clients/:id/report', authRequired, async (req, res) => {
   if (!canAccessClient(req.user, req.params.id)) return res.status(403).json({ error: 'Forbidden' });
-  res.json(buildReportStats(await getReportRowsForClient(req.params.id)));
+  res.json(buildReportStats(await getReportRowsForClient(req.params.id, reportType(req))));
 });
 
 // Admin uploads a client's report (replaces it). Body: { rows: [{name,email,status,date}] }
@@ -334,11 +345,12 @@ app.post('/api/clients/:id/report', authRequired, adminOnly, async (req, res) =>
   if (!client) return res.status(404).json({ error: 'Client not found' });
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
   if (!rows || rows.length === 0) return res.status(400).json({ error: 'No rows provided' });
-  await replaceReportRowsForClient(req.params.id, rows.map((r) => ({ name: r.name || '', email: r.email || '', status: r.status || '', date: r.date || '' })));
-  const stats = buildReportStats(await getReportRowsForClient(req.params.id));
+  const type = reportType(req);
+  await replaceReportRowsForClient(req.params.id, rows.map((r) => ({ name: r.name || '', email: r.email || '', status: r.status || '', date: r.date || '' })), type);
+  const stats = buildReportStats(await getReportRowsForClient(req.params.id, type));
   // Keep the client's "Training Completed" figure in sync with the uploaded
-  // report (number of users marked Completed).
-  await updateClientFields(req.params.id, { trainingCompleted: stats.completed });
+  // reports (Completed users across all report types).
+  await updateClientFields(req.params.id, { trainingCompleted: await getReportCompletedTotal(req.params.id) });
   res.json(stats);
 });
 

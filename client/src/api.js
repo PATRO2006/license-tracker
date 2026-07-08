@@ -41,6 +41,7 @@ export const api = {
   client: (id) => req(`/clients/${id}`),
   addClient: (body) => req('/clients', { method: 'POST', body: JSON.stringify(body) }),
   editClient: (id, body) => req(`/clients/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteClient: (id) => req(`/clients/${id}`, { method: 'DELETE' }),
   changePassword: (currentPassword, newPassword) =>
     req('/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
   requests: (status) => req(`/requests${status ? `?status=${status}` : ''}`),
@@ -49,8 +50,8 @@ export const api = {
     req(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   editRequest: (id, body) =>
     req(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  clientReport: (id) => req(`/clients/${id}/report`),
-  uploadClientReport: (id, rows) => req(`/clients/${id}/report`, { method: 'POST', body: JSON.stringify({ rows }) }),
+  clientReport: (id, type) => req(`/clients/${id}/report${type ? `?type=${type}` : ''}`),
+  uploadClientReport: (id, rows, type) => req(`/clients/${id}/report${type ? `?type=${type}` : ''}`, { method: 'POST', body: JSON.stringify({ rows }) }),
   onboardUser: (body) => req('/onboard', { method: 'POST', body: JSON.stringify(body) }),
   onboardUsersBulk: (users) => req('/onboard-bulk', { method: 'POST', body: JSON.stringify({ users }) }),
   onboardings: (clientId) => req(`/onboardings${clientId ? `?clientId=${clientId}` : ''}`),
