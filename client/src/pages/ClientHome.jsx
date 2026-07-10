@@ -36,6 +36,15 @@ export default function ClientHome({ notify, onChange }) {
   const icUsed = ic.reduce((s, t) => s + t.used, 0);
   const icCompleted = ic.reduce((s, t) => s + t.trainingCompleted, 0);
 
+  // Fittr: download the uploaded training report for a given type.
+  async function downloadReportFor(type, label) {
+    try {
+      const r = await api.clientReport(c.id, type);
+      if (!r.rows || r.rows.length === 0) return notify?.(`No ${label} report uploaded yet.`);
+      downloadPoshReport(r.rows, `${c.name}-${label}`);
+    } catch (e) { notify?.(`Download failed: ${e.message}`); }
+  }
+
   return (
     <>
       <div className="topbar">
@@ -46,8 +55,8 @@ export default function ClientHome({ notify, onChange }) {
         <div className="row" style={{ gap: 10 }}>
           {c.id === 'fittr' ? (
             <SplitDownload label="Download report" options={[
-              { label: 'Download for Employees', onClick: () => downloadUsersReport(c.name, c.onboardings, 'Employee') },
-              { label: 'Download for Coaches', onClick: () => downloadUsersReport(c.name, c.onboardings, 'Coach') },
+              { label: 'Download Employees report', onClick: () => downloadReportFor('employee', 'Employees') },
+              { label: 'Download Coaches report', onClick: () => downloadReportFor('coach', 'Coaches') },
             ]} />
           ) : (
             <button className="btn" onClick={() => downloadClientReport(c)}>Download report</button>

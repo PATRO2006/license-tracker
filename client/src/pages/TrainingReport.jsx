@@ -2,39 +2,77 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { downloadPoshReport } from '../report.js';
 
-// Parse an uploaded training CSV. Maps columns by HEADER name (case/spacing
-// insensitive) so any column order works; falls back to positional
-// (name, email, status, date) if the headers aren't recognised. This fixes
-// reports where only the name printed because the columns were in a different
-// order than expected.
+// Parse an uploaded training CSV robustly:
+//  1. Auto-detect the delimiter (comma, tab, semicolon, or pipe) — many
+//     platform/Google exports are tab-separated, which previously dumped the
+//     whole row into "name" and showed everyone as Not Completed.
+//  2. Identify columns first by header name, then by VALUE (email = has "@",
+//     status = "completed/not completed", date = a date/timestamp), so it
+//     works no matter what the headers are called or what order they're in.
+const DATE_RE = /\b(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{1,2}[-\s][A-Za-z]{3,}[-\s]\d{2,4})\b/;
+// Anchored: matches a status VALUE ("Completed", "Not completed") but not a
+// column label like "Completed On", so header rows are still detected.
+const STATUS_RE = /^(completed|not\s*completed|incomplete|complete|pending|yes|no|in\s*progress)$/i;
+
 function parseTrainingCsv(text) {
+  const clean = text.replace(/\r/g, '');
+  const rawLines = clean.split('\n').filter((l) => l.trim());
+  if (rawLines.length === 0) return [];
+
+  // Detect delimiter: whichever splits the first line into the most fields.
+  const cands = [',', '\t', ';', '|'];
+  const delim = cands.reduce((best, d) =>
+    (rawLines[0].split(d).length > rawLines[0].split(best).length ? d : best), ',');
+
   const splitLine = (l) => {
     const out = []; let cur = ''; let q = false;
     for (let i = 0; i < l.length; i++) {
       const ch = l[i];
       if (q) { if (ch === '"' && l[i + 1] === '"') { cur += '"'; i++; } else if (ch === '"') q = false; else cur += ch; }
       else if (ch === '"') q = true;
-      else if (ch === ',') { out.push(cur); cur = ''; }
+      else if (ch === delim) { out.push(cur); cur = ''; }
       else cur += ch;
     }
     out.push(cur); return out;
   };
-  const lines = text.replace(/\r/g, '').split('\n').filter((l) => l.trim());
-  if (lines.length === 0) return [];
-  const norm = (s) => s.trim().toLowerCase().replace(/[^a-z]/g, '');
-  const header = splitLine(lines[0]).map(norm);
-  const idx = (names) => header.findIndex((h) => names.includes(h));
-  let iN = idx(['name', 'fullname', 'employeename', 'username']);
-  let iE = idx(['email', 'emailaddress', 'emailid']);
-  let iS = idx(['status', 'trainingstatus', 'completion', 'completionstatus']);
-  let iD = idx(['date', 'completedon', 'completiondate', 'timestamp', 'completedat']);
-  const headerRecognised = iN >= 0 || iE >= 0 || iS >= 0;
-  if (!headerRecognised) { iN = 0; iE = 1; iS = 2; iD = 3; }
-  const val = (c, i) => (i >= 0 && c[i] !== undefined ? c[i].trim() : '');
-  return lines.slice(headerRecognised ? 1 : 0).map((l) => {
-    const c = splitLine(l);
-    return { name: val(c, iN), email: val(c, iE), status: val(c, iS), date: val(c, iD) };
-  }).filter((r) => r.name || r.email);
+
+  const matrix = rawLines.map((l) => splitLine(l).map((c) => c.trim()));
+  // First row is a header if it has no email and no status-looking value.
+  const firstIsHeader = !matrix[0].some((c) => c.includes('@') || STATUS_RE.test(c) || DATE_RE.test(c));
+  const norm = (s) => s.toLowerCase().replace(/[^a-z]/g, '');
+  const header = firstIsHeader ? matrix[0].map(norm) : [];
+  const body = firstIsHeader ? matrix.slice(1) : matrix;
+  if (body.length === 0) return [];
+  const ncol = Math.max(...matrix.map((r) => r.length));
+
+  const byName = (names) => header.findIndex((h) => names.some((n) => h.includes(n)));
+  // Fraction of body rows whose column i matches a test.
+  const frac = (i, test) => {
+    let hit = 0, seen = 0;
+    for (const r of body) { const v = (r[i] || ''); if (v) { seen++; if (test(v)) hit++; } }
+    return seen ? hit / seen : 0;
+  };
+  const bestCol = (test, exclude) => {
+    let best = -1, bestScore = 0.3; // need >30% of values to match
+    for (let i = 0; i < ncol; i++) {
+      if (exclude.includes(i)) continue;
+      const s = frac(i, test);
+      if (s > bestScore) { bestScore = s; best = i; }
+    }
+    return best;
+  };
+
+  // Header hints first, then value-based detection.
+  let iE = byName(['email']); if (iE < 0) iE = bestCol((v) => v.includes('@'), []);
+  let iS = byName(['status', 'completion', 'training', 'posh']); if (iS < 0) iS = bestCol((v) => STATUS_RE.test(v), [iE]);
+  let iD = byName(['date', 'timestamp', 'completedon', 'completedat']); if (iD < 0) iD = bestCol((v) => DATE_RE.test(v), [iE, iS]);
+  let iN = byName(['name', 'fullname', 'employee', 'participant']);
+  if (iN < 0) iN = [...Array(ncol).keys()].find((i) => ![iE, iS, iD].includes(i)) ?? 0;
+
+  const val = (c, i) => (i >= 0 && c[i] !== undefined ? c[i] : '');
+  return body.map((c) => ({
+    name: val(c, iN), email: val(c, iE), status: val(c, iS), date: val(c, iD),
+  })).filter((r) => r.name || r.email);
 }
 
 export default function TrainingReport({ notify }) {
